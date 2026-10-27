@@ -1,0 +1,10 @@
+const fs = require("fs");
+let s = fs.readFileSync("index.html", "utf8");
+const css = fs.readFileSync("new.css", "utf8"), top = fs.readFileSync("new_top.html", "utf8");
+let a = s.indexOf("<style>") + 7, b = s.indexOf("</style>");
+s = s.slice(0, a) + css + s.slice(b);
+a = s.indexOf("<body>") + 6; b = s.indexOf('<div class="tk" id="tk"');
+if (a < 6 || b < 0) throw new Error("anchors not found: is index.html the original file?");
+s = s.slice(0, a) + top + s.slice(b);
+fs.writeFileSync("index.html", s);
+console.log("patched index.html,", s.length, "bytes");
