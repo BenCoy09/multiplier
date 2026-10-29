@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>For judges · Multiplier Explorer</title>
+<style>
+:root{--bg:#f4f5f1;--pn:#fff;--ink:#0f141b;--mu:#58626e;--ln:#d8dcd4;--ac:#0b6e5f;--ng:#b3412e;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0b141d;--pn:#112030;--ink:#e8eff5;--mu:#8ea1b2;--ln:#22333f;--ac:#4fd1b8;--ng:#f08a77}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+.w{max-width:760px;margin:0 auto;padding:0 18px}header{border-bottom:1px solid var(--ln)}.hd{display:flex;justify-content:space-between;align-items:center;padding:16px 0}
+.wm{font:700 17px Georgia,serif}nav{display:flex;gap:16px;font-size:14px}nav a{color:var(--mu);text-decoration:none}
+h1{font:400 clamp(32px,6vw,46px)/1.05 Georgia,serif;letter-spacing:-.02em;margin:28px 0 8px}h2{font:700 17px system-ui;margin:30px 0 8px}
+p,li{color:var(--ink)}.mu{color:var(--mu)}a{color:var(--ac)}code{font:13px ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+.card{background:var(--pn);border:1px solid var(--ln);border-radius:12px;padding:14px 16px;margin:10px 0;font:14px ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+.ok{color:var(--ac);font-weight:700}.bad{color:var(--ng);font-weight:700}ol,ul{padding-left:20px}li{margin:6px 0}footer{margin:34px 0 40px;font-size:13px;color:var(--mu);border-top:1px solid var(--ln);padding-top:14px}
+</style></head><body>
+<header><div class="w hd"><span class="wm">Multiplier Explorer</span><nav><a href="/">Home</a><a href="/app">Explorer</a><a href="/rooms">Rooms</a></nav></div></header>
+<main class="w">
+<h1>For judges.</h1>
+<p class="mu">Everything you need to test this in two minutes, and what is real versus limited. Independent project, not affiliated with Robinhood.</p>
+<h2>Test it in two minutes</h2>
+<ol>
+<li>Open the <a href="/">home page</a>. The <b>live radar</b> shows each stock token’s latest multiplier update, read from Robinhood Chain by this server. Replay the SPY update to see what a multiplier change does.</li>
+<li>Open the <a href="/app">explorer</a>, press <b>Use example wallet</b>, then <b>Analyze</b>. Every figure links to its on-chain transaction, and the page says how the balance was obtained.</li>
+<li>Open <a href="/rooms">Rooms</a>. Anyone can read. Posting needs a Pro pass.</li>
+<li>To see Pro, burn $WIF as described below, paste the transaction hash under <b>Unlock Pro</b>, and the full holding history, CSV, wallet management, Telegram alerts and posting unlock.</li>
+</ol>
+<h2>How $WIF is used</h2>
+<ul>
+<li><b>Pro pass, 30 days:</b> burn $WIF by sending it from your own wallet to the dead address. The server verifies the burn on-chain. The site never connects to a wallet.</li>
+<li><b>Watch more wallets:</b> each extra wallet (up to 5 per pass) costs another burn.</li>
+<li><b>Renewals:</b> burn again to extend. The Telegram bot reminds you 3 days before a pass ends.</li>
+<li>Pro unlocks the wallet’s balance at <b>every</b> update, CSV export, Telegram alerts when a multiplier update is scheduled or takes effect, and posting in the rooms.</li>
+</ul>
+<div class="card">$WIF contract <a href="https://robinhoodchain.blockscout.com/token/0x5173b8eA6923c2d40267890D45C46a3480954773">0x5173b8eA6923c2d40267890D45C46a3480954773</a> (as listed on worldisflat.fun)<br>Dead address <code>0x000000000000000000000000000000000000dEaD</code></div>
+<h2>Why people come back</h2>
+<p>Updates are rare but matter to anyone holding the tokens. The free tool brings people in, alerts give a reason to stay, and passes expire after 30 days, so regular users renew. Every burn is verified on-chain and listed below.</p>
+<h2>Live status</h2>
+<div class="card" id="st">Loading…</div>
+<h2>Verified burns through this app</h2>
+<div class="card" id="bn">Loading…</div>
+<h2>What is real and what is limited</h2>
+<ul>
+<li>Multiplier history, the live radar and holder balances are read from the chain. If a balance can’t be verified, no figure is shown.</li>
+<li>Alerts depend on the update event appearing before it takes effect. In the two updates we checked it was about ten minutes early. That is not guaranteed, and updates are rare.</li>
+<li>A holder badge in rooms means the wallet that paid for the pass holds that token. It does not prove who is typing.</li>
+<li>Rooms are only as lively as the people in them. Nothing in them is simulated.</li>
+</ul>
+<footer>Code: <a href="https://github.com/BenCoy09/multiplier">github.com/BenCoy09/multiplier</a> · Built for the World Is Flat hackathon.</footer>
+</main>
+<script>
+var $=function(i){return document.getElementById(i)};
+Promise.all([fetch("/api/health").then(function(r){return r.json()}),fetch("/api/radar").then(function(r){return r.json()}),fetch("/api/stats").then(function(r){return r.json()})]).then(function(a){
+var h=a[0],r=a[1],s=a[2],t=h.telegram||{},ev=0;r.tokens.forEach(function(x){ev+=x.events.length});
+$("st").innerHTML="Chain reads: "+(r.now&&!r.error?'<span class="ok">working</span>':'<span class="bad">'+(r.error||"starting")+"</span>")+"<br>Multiplier updates known: "+ev+" across 5 tokens<br>Telegram bot: "+(t.ok?'<span class="ok">connected as @'+t.username+"</span>":'<span class="bad">'+(t.why||"not connected")+"</span>")+"<br>Storage: "+h.store;
+if(!s.count||s.decimals==null){$("bn").textContent=s.count?"Burn totals are unavailable right now.":"No burns yet. Every verified burn will be listed here with its transaction."}
+else{var w=BigInt(s.burned)/(10n**BigInt(s.decimals));$("bn").innerHTML=w.toString()+" $WIF burned in "+s.count+" verified transaction"+(s.count>1?"s":"")+":<br>"+s.recent.map(function(x){return'<a href="https://robinhoodchain.blockscout.com/tx/'+x.tx+'" target="_blank" rel="noopener">'+x.tx.slice(0,18)+"…</a>"}).join("<br>")}
+}).catch(function(){$("st").textContent="Status unavailable right now."});
+</script></body></html>

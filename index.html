@@ -107,7 +107,7 @@ o.innerHTML=h;const c=$("cp");if(c){c.onclick=async()=>{try{if(navigator.share)a
 var PASS="";try{PASS=localStorage.getItem("mx_pass")||""}catch(e){}
 function setPass(p){PASS=p;try{if(p)localStorage.setItem("mx_pass",p);else localStorage.removeItem("mx_pass")}catch(e){}}
 async function proInit(){var b=$("pro");
-if(PASS){try{var r=await(await fetch("/api/pass?pass="+encodeURIComponent(PASS))).json();if(r.valid){b.innerHTML='<div class="msg"><b>Pro active</b> until '+new Date(r.exp).toISOString().slice(0,10)+'. Analyze now also shows the wallet’s balance at every update, with a CSV download.</div>';tgLink(b);return}}catch(e){}setPass("")}
+if(PASS){try{var r=await(await fetch("/api/pass?pass="+encodeURIComponent(PASS))).json();if(r.valid){b.innerHTML='<div class="msg"><b>Pro active</b> until '+new Date(r.exp).toISOString().slice(0,10)+'. Analyze now also shows the wallet’s balance at every update, with a CSV download.</div>';tgLink(b);proTools(b,r);return}}catch(e){}setPass("")}
 b.innerHTML='<details id="pd"><summary>Unlock Pro with $WIF</summary><div id="pb" class="m">Loading…</div></details>';
 $("pd").addEventListener("toggle",function(){if($("pd").open)proInfo()});if(location.hash==="#pro")$("pd").open=true}
 async function proInfo(){var x=$("pb");try{var i=await(await fetch("/api/pass-info")).json();if(i.error)throw new Error(i.error);
@@ -127,6 +127,13 @@ window.__csv=csv.join("\n");
 return'<h2>Your holding at each update</h2><div class="tw"><table class="ht"><tr><th>Date</th><th>Multiplier</th><th>Tokens held</th><th>Shares before</th><th>Shares after</th><th>Change</th></tr>'+rows.join("")+'</table></div><div class="acts"><button id="pdl" type="button" onclick="dlcsv()">Download CSV</button></div>'}
 function dlcsv(){var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([window.__csv],{type:"text/csv"}));a.download="multiplier-history.csv";a.click()}
 async function tgLink(b){try{var i=await(await fetch("/api/pass-info")).json();if(i.bot)b.insertAdjacentHTML("beforeend",'<p><a class="go" style="display:inline-block;text-decoration:none;border-radius:8px" href="https://t.me/'+esc(i.bot)+'?start='+encodeURIComponent(PASS)+'" target="_blank" rel="noopener">Turn on Telegram alerts</a></p><p class="m">Alerts cover the wallet that paid the burn, only for stock tokens it holds.</p>')}catch(e){}}
+async function proTools(b,r){try{var i=await(await fetch("/api/pass-info")).json();
+b.insertAdjacentHTML("beforeend",'<details class="m" id="mg"><summary>Manage your pass</summary><p>Alerts cover '+r.wallets.length+" wallet"+(r.wallets.length>1?"s":"")+":"+r.wallets.map(function(w){return"<code>"+esc(w)+"</code>"}).join("")+"</p>"+
+'<p><b>Watch another wallet</b> (up to 5 in total). Send <b>'+esc(r.priceWallet)+" $WIF</b> to <code>"+i.dead+'</code> then paste the wallet to watch and the transaction hash:</p><div class="row"><input id="aw" placeholder="Wallet to watch (0x…)" spellcheck="false" aria-label="Wallet to watch"></div><div class="row" style="margin-top:6px"><input id="at" placeholder="0x… burn transaction hash" spellcheck="false" aria-label="Burn transaction hash"><button class="go" id="ab" type="button">Add</button></div>'+
+"<p><b>Renew for another "+i.days+" days.</b> Send <b>"+esc(r.price)+' $WIF</b> to the same address and paste the hash:</p><div class="row"><input id="rt" placeholder="0x… burn transaction hash" spellcheck="false" aria-label="Renewal transaction hash"><button class="go" id="rb" type="button">Renew</button></div><p id="mm" class="m"></p></details>');
+$("ab").onclick=function(){act("/api/addwallet?tx="+encodeURIComponent($("at").value.trim())+"&wallet="+encodeURIComponent($("aw").value.trim()))};
+$("rb").onclick=function(){act("/api/renew?tx="+encodeURIComponent($("rt").value.trim()))}}catch(e){}}
+async function act(u){var m=$("mm");m.textContent="Checking the transaction on-chain…";try{var x=await fetch(u,{headers:{"x-pass":PASS}}),d=await x.json();if(!x.ok)throw new Error(d.error||"Failed");proInit()}catch(e){m.textContent=e.message}}
 function wrap(c,t,x,y,w,lh){let l="";for(const wd of t.split(" ")){const q=l?l+" "+wd:wd;if(c.measureText(q).width>w&&l){c.fillText(l,x,y);y+=lh;l=wd}else l=q}c.fillText(l,x,y)}
 function card(){if(!last)return;const c=document.createElement("canvas");c.width=1200;c.height=630;const x=c.getContext("2d");
 x.fillStyle="#0b141d";x.fillRect(0,0,1200,630);x.fillStyle="#4fd1b8";x.fillRect(0,0,12,630);
