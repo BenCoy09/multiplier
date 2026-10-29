@@ -41,7 +41,7 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 footer{border-top:1px solid var(--ln);padding:20px 0 36px;font-size:13px;color:var(--mu)}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
 </style></head><body>
-<header><div class="w hd"><span class="wm">Multiplier Explorer</span><nav><a href="#lab">Try it</a><a href="#how">How it works</a><a class="btn" href="/app">Open explorer</a></nav></div></header>
+<header><div class="w hd"><span class="wm">Multiplier Explorer</span><nav><a href="#lab">Try it</a><a href="#how">How it works</a><a href="/rooms">Rooms</a><a class="btn" href="/app">Open explorer</a></nav></div></header>
 <main class="w">
 <section class="hero">
 <div>
@@ -61,12 +61,32 @@ footer{border-top:1px solid var(--ln);padding:20px 0 36px;font-size:13px;color:v
 <p class="meta">Your token count is typed in here. The explorer reads real wallets from the chain.</p>
 </div>
 </section>
+<section class="sec" id="radar"><h2>Live radar.</h2>
+<p class="sub2">Multiplier updates read from the chain by this server, refreshed every 30 seconds. An update appears as soon as its event is on-chain, which in the two we checked was about ten minutes before it took effect.</p>
+<div id="rd" class="rd">Reading the chain…</div></section>
+<style>.sub2{color:var(--mu);margin:-12px 0 18px;max-width:62ch}.rd .r{display:grid;grid-template-columns:64px 1fr;gap:6px 12px;padding:14px 0;border-top:1px solid var(--ln)}.rd b{font:700 15px ui-monospace,Menlo,monospace}.rd .s{color:var(--mu);font:13px ui-monospace,Menlo,monospace;overflow-wrap:anywhere}.rd .s a{color:var(--ac)}.rd mark{padding:1px 6px}</style>
+<script>
+(function(){var el=document.getElementById("rd"),D=null,at=0,TX="https://robinhoodchain.blockscout.com/tx/";
+function f9(s){var b=BigInt(s),q=10n**9n;b=(b+q/2n)/q;var t=b.toString();while(t.length<10)t="0"+t;return t.slice(0,-9)+"."+t.slice(-9)}
+function cd(s){s=Math.max(0,s);var m=Math.floor(s/60),x=s%60;return(m<10?"0":"")+m+":"+(x<10?"0":"")+x}
+function now(){return D.now+Math.floor((Date.now()-at)/1000)}
+function draw(){if(!D){return}var n=now(),h="";
+D.tokens.forEach(function(t){var past=t.events.filter(function(e){return e.eff<=n}),sch=t.events.filter(function(e){return e.eff>n}),st="";
+if(sch.length){st=sch.map(function(e){return"<mark>SCHEDULED</mark> "+f9(e.o)+" → "+f9(e.n)+" in "+cd(e.eff-n)+' · <a href="'+TX+e.tx+'" target="_blank" rel="noopener">transaction</a>'}).join("<br>")}
+else if(past.length){var e=past[past.length-1];st="Last update "+new Date(e.eff*1000).toISOString().slice(0,10)+": "+f9(e.o)+" → "+f9(e.n)+' · <a href="'+TX+e.tx+'" target="_blank" rel="noopener">transaction</a>'}
+else st=t.complete?"No multiplier updates found in the on-chain history.":"No updates found so far. The full history scan is still running.";
+h+='<div class="r"><b>'+t.sym+'</b><div class="s">'+st+"</div></div>"});
+if(D.error)h+='<p class="s">Chain read problem: '+D.error+". Showing the last known data.</p>";
+el.innerHTML=h}
+function load(){fetch("/api/radar").then(function(r){return r.json()}).then(function(d){D=d;at=Date.now();draw()}).catch(function(){if(!D)el.textContent="The radar is unavailable right now."})}
+load();setInterval(load,30000);setInterval(draw,1000)})();
+</script>
 <section class="sec" id="how"><h2>A token balance doesn’t tell the whole story.</h2>
 <div class="g3"><div><b>01</b><h3>A wallet holds tokens</h3><p>The balance is a raw token amount. A multiplier update does not change it.</p></div><div><b>02</b><h3>The multiplier changes</h3><p>An on-chain event records the old value, the new value and when it takes effect.</p></div><div><b>03</b><h3>We work out the difference</h3><p>Tokens × multiplier, before and after, using the wallet’s balance when the update took effect.</p></div></div></section>
 <section class="sec"><h2>Built to be checked.</h2>
 <div class="g3"><div><h3>Sourced from events</h3><p>Each update comes from an on-chain event and links to its transaction.</p></div><div><h3>Limits are stated</h3><p>If a balance or history can’t be verified, the explorer says so instead of guessing.</p></div><div><h3>Read-only</h3><p>No wallet connection, no login, no trading. Just a public address.</p></div></div></section>
 <section class="sec" id="wif"><h2>Pro is unlocked by burning $WIF.</h2>
-<div class="g3"><div><b>FREE</b><h3>Any wallet, latest update</h3><p>See what the most recent multiplier update meant for any holder, with the transaction link.</p></div><div><b>PRO · 30 DAYS</b><h3>Every update, plus CSV</h3><p>The wallet’s balance at each update, and a download. Unlock by sending $WIF to the dead address.</p></div><div><b>THE LOOP</b><h3>Passes expire, burns repeat</h3><p>Pro lasts 30 days, so regular users come back and burn again. Each burn is checked on-chain and listed here.</p></div></div>
+<div class="g3"><div><b>FREE</b><h3>Any wallet, latest update</h3><p>See what the most recent multiplier update meant for any holder, with the transaction link.</p></div><div><b>PRO · 30 DAYS</b><h3>History, CSV and alerts</h3><p>The wallet’s balance at every update, a download, and Telegram alerts when a multiplier update is scheduled for a token it holds, plus posting in the live rooms. Unlock by burning $WIF.</p></div><div><b>THE LOOP</b><h3>Passes expire, burns repeat</h3><p>Pro lasts 30 days, so regular users come back and burn again. Each burn is checked on-chain and listed here.</p></div></div>
 <p class="meta" id="bs">Loading burn totals…</p><p><a class="btn o" href="/app#pro">Unlock in the explorer</a></p></section>
 <script>
 (function(){var el=document.getElementById("bs");
