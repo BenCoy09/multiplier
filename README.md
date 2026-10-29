@@ -4,7 +4,7 @@ A read-only explorer for Robinhood Chain **stock tokens** (ERC-8056). When a tok
 
 Independent project. Not affiliated with Robinhood. Shares represented = token balance × multiplier; this is not a statement about market value.
 
-- Live app: https://multiplier-cg4g.onrender.com/rooms
+- Live app: https://multiplier-cg4g.onrender.com/app
 - Demo video: VIDEO_URL_HERE
 - Built for the World Is Flat hackathon, categories: stock tokens, tools and infra
 
