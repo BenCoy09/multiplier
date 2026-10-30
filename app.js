@@ -458,11 +458,13 @@ async function tgCheck() {
 
 const rd = (f) => require("fs").readFileSync(require("path").join(__dirname, f), "utf8");
 const HTML = rd("index.html"), HOME = rd("home.html"), ROOMSPAGE = rd("rooms.html"), JUDGESPAGE = rd("judges.html");
+const STATIC = { "/logo.svg": [rd("logo.svg"), "image/svg+xml"], "/mark.svg": [rd("mark.svg"), "image/svg+xml"], "/site.css": [rd("site.css"), "text/css; charset=utf-8"], "/site.js": [rd("site.js"), "application/javascript; charset=utf-8"] };
 if (process.argv[2] === "verify") verify().catch((e) => { console.error("VERIFY FAILED:", e.message); process.exit(1); });
 else http.createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
   if (u.pathname === "/") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(HOME); }
   if (u.pathname === "/rooms") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(ROOMSPAGE); }
+  if (STATIC[u.pathname]) { res.writeHead(200, { "content-type": STATIC[u.pathname][1], "cache-control": "public, max-age=300" }); return res.end(STATIC[u.pathname][0]); }
   if (u.pathname === "/judges") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(JUDGESPAGE); }
   if (u.pathname === "/app") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(HTML); }
   if (u.pathname === "/api/chat/stream") {

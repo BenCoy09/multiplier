@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Rooms · Multiplier Explorer</title>
+<title>Rooms · Multiplier Explorer</title><link rel="icon" href="/mark.svg" type="image/svg+xml">
 <style>
 :root{--bg:#f4f5f1;--pn:#fff;--ink:#0f141b;--mu:#58626e;--ln:#d8dcd4;--ac:#0b6e5f;--hi:#d3f0e6;--ng:#b3412e;color-scheme:light dark}
 @media (prefers-color-scheme:dark){:root{--bg:#0b141d;--pn:#112030;--ink:#e8eff5;--mu:#8ea1b2;--ln:#22333f;--ac:#4fd1b8;--hi:#12392f;--ng:#f08a77}}
@@ -21,8 +21,8 @@ h1{font:400 clamp(30px,6vw,44px)/1.05 Georgia,serif;letter-spacing:-.02em;margin
 .note{margin:10px 0 0;font-size:13px;color:var(--mu)}.note a{color:var(--ac)}.er{color:var(--ng)}
 .rules{margin:18px 0 40px;font-size:13px;color:var(--mu);border-top:1px solid var(--ln);padding-top:14px}
 button:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
-</style></head><body>
-<header><div class="w hd"><span class="wm">Multiplier Explorer</span><nav><a href="/">Home</a><a href="/app">Explorer</a><a href="/rooms">Rooms</a></nav></div></header>
+</style><link rel="stylesheet" href="/site.css"></head><body>
+<header id="sx"></header>
 <main class="w">
 <h1>Rooms.</h1>
 <p class="sub">One room per stock token, anchored to its live multiplier status. Anyone can read. Posting needs a Pro pass, so everyone who posts has burned $WIF.</p>
@@ -71,4 +71,4 @@ fetch("/api/radar").then(function(r){return r.json()}).then(function(d){RD=d;RDA
 setInterval(function(){fetch("/api/radar").then(function(r){return r.json()}).then(function(d){RD=d;RDAT=Date.now()}).catch(function(){})},30000);setInterval(pin,1000);
 if(PASS)fetch("/api/pass?pass="+encodeURIComponent(PASS)).then(function(r){return r.json()}).then(function(d){VALID=!!d.valid;cmp()}).catch(function(){cmp()});else cmp()}
 init();
-</script></body></html>
+</script><footer id="sxf"></footer><script src="/site.js"></script></body></html>

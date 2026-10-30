@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>For judges · Multiplier Explorer</title>
+<title>For judges · Multiplier Explorer</title><link rel="icon" href="/mark.svg" type="image/svg+xml">
 <style>
 :root{--bg:#f4f5f1;--pn:#fff;--ink:#0f141b;--mu:#58626e;--ln:#d8dcd4;--ac:#0b6e5f;--ng:#b3412e;color-scheme:light dark}
 @media (prefers-color-scheme:dark){:root{--bg:#0b141d;--pn:#112030;--ink:#e8eff5;--mu:#8ea1b2;--ln:#22333f;--ac:#4fd1b8;--ng:#f08a77}}
@@ -11,8 +11,8 @@ h1{font:400 clamp(32px,6vw,46px)/1.05 Georgia,serif;letter-spacing:-.02em;margin
 p,li{color:var(--ink)}.mu{color:var(--mu)}a{color:var(--ac)}code{font:13px ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
 .card{background:var(--pn);border:1px solid var(--ln);border-radius:12px;padding:14px 16px;margin:10px 0;font:14px ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
 .ok{color:var(--ac);font-weight:700}.bad{color:var(--ng);font-weight:700}ol,ul{padding-left:20px}li{margin:6px 0}footer{margin:34px 0 40px;font-size:13px;color:var(--mu);border-top:1px solid var(--ln);padding-top:14px}
-</style></head><body>
-<header><div class="w hd"><span class="wm">Multiplier Explorer</span><nav><a href="/">Home</a><a href="/app">Explorer</a><a href="/rooms">Rooms</a></nav></div></header>
+</style><link rel="stylesheet" href="/site.css"></head><body>
+<header id="sx"></header>
 <main class="w">
 <h1>For judges.</h1>
 <p class="mu">Everything you need to test this in two minutes, and what is real versus limited. Independent project, not affiliated with Robinhood.</p>
@@ -33,7 +33,7 @@ p,li{color:var(--ink)}.mu{color:var(--mu)}a{color:var(--ac)}code{font:13px ui-mo
 <div class="card">$WIF contract <a href="https://robinhoodchain.blockscout.com/token/0x5173b8eA6923c2d40267890D45C46a3480954773">0x5173b8eA6923c2d40267890D45C46a3480954773</a> (as listed on worldisflat.fun)<br>Dead address <code>0x000000000000000000000000000000000000dEaD</code></div>
 <h2>Why people come back</h2>
 <p>Updates are rare but matter to anyone holding the tokens. The free tool brings people in, alerts give a reason to stay, and passes expire after 30 days, so regular users renew. Every burn is verified on-chain and listed below.</p>
-<h2>Live status</h2>
+<h2 id="live">Live status</h2>
 <div class="card" id="st">Loading…</div>
 <h2>Verified burns through this app</h2>
 <div class="card" id="bn">Loading…</div>
@@ -44,7 +44,7 @@ p,li{color:var(--ink)}.mu{color:var(--mu)}a{color:var(--ac)}code{font:13px ui-mo
 <li>A holder badge in rooms means the wallet that paid for the pass holds that token. It does not prove who is typing.</li>
 <li>Rooms are only as lively as the people in them. Nothing in them is simulated.</li>
 </ul>
-<footer>Code: <a href="https://github.com/BenCoy09/multiplier">github.com/BenCoy09/multiplier</a> · Built for the World Is Flat hackathon.</footer>
+
 </main>
 <script>
 var $=function(i){return document.getElementById(i)};
@@ -54,4 +54,4 @@ $("st").innerHTML="Chain reads: "+(r.now&&!r.error?'<span class="ok">working</sp
 if(!s.count||s.decimals==null){$("bn").textContent=s.count?"Burn totals are unavailable right now.":"No burns yet. Every verified burn will be listed here with its transaction."}
 else{var w=BigInt(s.burned)/(10n**BigInt(s.decimals));$("bn").innerHTML=w.toString()+" $WIF burned in "+s.count+" verified transaction"+(s.count>1?"s":"")+":<br>"+s.recent.map(function(x){return'<a href="https://robinhoodchain.blockscout.com/tx/'+x.tx+'" target="_blank" rel="noopener">'+x.tx.slice(0,18)+"…</a>"}).join("<br>")}
 }).catch(function(){$("st").textContent="Status unavailable right now."});
-</script></body></html>
+</script><footer id="sxf"></footer><script src="/site.js"></script></body></html>

@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Multiplier Explorer: same tokens, different shares</title>
+<title>Multiplier Explorer: same tokens, different shares</title><link rel="icon" href="/mark.svg" type="image/svg+xml">
 <style>
 :root{--bg:#f4f5f1;--pn:#fff;--ink:#0f141b;--mu:#58626e;--ln:#d8dcd4;--ac:#0b6e5f;--hi:#d3f0e6;color-scheme:light dark}
 @media (prefers-color-scheme:dark){:root{--bg:#0b141d;--pn:#112030;--ink:#e8eff5;--mu:#8ea1b2;--ln:#22333f;--ac:#4fd1b8;--hi:#12392f}}
@@ -40,14 +40,14 @@ button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid var(-
 .band{border-top:1px solid var(--ln);padding:52px 0;text-align:center}.band h2{font:400 clamp(30px,6vw,48px)/1.1 Georgia,serif;margin:0 0 10px}.band p{color:var(--mu);margin:0 auto 22px;max-width:50ch}
 footer{border-top:1px solid var(--ln);padding:20px 0 36px;font-size:13px;color:var(--mu)}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
-</style></head><body>
-<header><div class="w hd"><span class="wm">Multiplier Explorer</span><nav><a href="#lab">Try it</a><a href="#how">How it works</a><a href="/rooms">Rooms</a><a class="btn" href="/app">Open explorer</a></nav></div></header>
+</style><link rel="stylesheet" href="/site.css"></head><body>
+<header id="sx"></header>
 <main class="w">
 <section class="hero">
 <div>
 <p class="eb">ROBINHOOD CHAIN / STOCK TOKENS</p>
-<h1>Same tokens. <em>Different shares.</em></h1>
-<p class="sub">When a stock token’s multiplier is updated, the balance in a wallet stays the same, but the underlying shares those tokens represent change. Watch it happen, then check a real wallet.</p>
+<h1>How many real shares do your <em>stock tokens</em> stand for?</h1>
+<p class="sub">Your wallet shows a token count. This shows the real shares behind it, and tells you when that changes. Same tokens, different shares. Watch it happen, then check a real wallet.</p>
 <div class="cta"><a class="btn" href="/app">Open the explorer</a><a class="btn o" href="#lab">Play with it first</a></div>
 <p class="tag">READ-ONLY · ON-CHAIN DATA · NO WALLET CONNECTION</p>
 </div>
@@ -98,7 +98,7 @@ el.innerHTML=s.count?"Burned through this app: "+w.toString()+" $WIF in "+s.coun
 </script>
 <section class="band"><h2>Check a real wallet.</h2><p>Pick a stock token, paste an address, and see what its multiplier updates meant for that holding.</p><a class="btn" href="/app">Open the explorer</a></section>
 </main>
-<footer><div class="w"><a href="/judges" style="color:inherit">For judges</a> · Independent project. Not affiliated with Robinhood. Shares represented = token balance × multiplier; this is not a statement about market value.</div></footer>
+
 <script>
 (function(){
 if(/[?&]w=/.test(location.search)){location.replace("/app"+location.search);return}
@@ -128,4 +128,4 @@ meta();draw(E);
 if(!("IntersectionObserver" in window))play();
 else new IntersectionObserver(function(e,o){if(e[0].isIntersecting){o.disconnect();if(mode==="r")play()}},{threshold:.5}).observe($("lab"));
 })();
-</script></body></html>
+</script><footer id="sxf"></footer><script src="/site.js"></script></body></html>

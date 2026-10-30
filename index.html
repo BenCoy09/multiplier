@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Stock token multiplier explorer</title>
+<title>Stock token multiplier explorer</title><link rel="icon" href="/mark.svg" type="image/svg+xml">
 <style>
 :root{--bg:#f4f5f1;--pn:#fff;--ink:#0f141b;--mu:#58626e;--ln:#d8dcd4;--ac:#0b6e5f;--ng:#b3412e;--hi:#d3f0e6;color-scheme:light dark}
 @media (prefers-color-scheme:dark){:root{--bg:#0b141d;--pn:#112030;--ink:#e8eff5;--mu:#8ea1b2;--ln:#22333f;--ac:#4fd1b8;--ng:#f08a77;--hi:#12392f}}
@@ -60,8 +60,8 @@ li.sc::before{background:var(--bg);border-color:var(--ac)}li a{color:var(--ac);f
 @media(prefers-reduced-motion:no-preference){.card{animation:in .25s ease-out}@keyframes in{from{opacity:0;transform:translateY(6px)}}}
 .pro{margin:10px 0 4px;max-width:680px}.pro summary{cursor:pointer;font-weight:600;padding:6px 0}.pro code{display:block;margin:6px 0;padding:8px;background:var(--pn);border:1px solid var(--ln);border-radius:6px;font:12px ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
 .tw{overflow-x:auto}table.ht{border-collapse:collapse;width:100%;font:13px ui-monospace,Menlo,monospace}table.ht th,table.ht td{padding:9px 10px;border-top:1px solid var(--ln);text-align:right;white-space:nowrap}table.ht th{color:var(--mu);font-weight:400}table.ht td:first-child,table.ht th:first-child{text-align:left}
-</style></head><body>
-<header><div class="hd"><span class="wm">Multiplier Explorer</span><nav><a href="/">← Home</a><a href="/rooms">Rooms</a></nav></div></header>
+</style><link rel="stylesheet" href="/site.css"></head><body>
+<header id="sx"></header>
 <main>
 <div id="lookup" class="lh"><h2>Look up a wallet. See the change.</h2><p>Choose a stock token and enter a wallet address. Every update links to its transaction, and anything that can’t be verified is stated.</p></div>
 <script>
@@ -91,6 +91,7 @@ try{const r=await fetch("/api/lookup?token="+cur+"&wallet="+w+(PASS?"&full=1":""
 catch(e){o.innerHTML=`<div class="msg er"><b>The data could not be retrieved or verified.</b><br>${esc(e.message)}<br>This is an error, not an empty history. Press Analyze to retry.</div>`}
 $("go").disabled=false}
 function render(d,w){const o=$("out"),dec=d.decimals;let h="";
+if(d.events.length){const L=[...d.events].sort((a,b)=>b.eff-a.eff)[0],bn=BigInt(d.balanceNow),sh2=bn*BigInt(L.n)/(10n**18n);h+='<div class="msg" style="border-style:solid;color:var(--ink)"><b>Today:</b> '+fx(bn,dec)+" "+cur+" tokens = about <b>"+fx(sh2,dec)+"</b> real shares, using the multiplier from the latest update.</div>"}
 if(d.partialHistory)h+='<div class="msg er"><b>Partial history.</b> The search did not finish within its time limit, so events shown may be incomplete.</div>';
 if(d.scheduled.length)h+=`<div class="msg"><b>Scheduled update (not yet effective).</b> It is not applied to any figure below.</div><ol>${tl(d.scheduled,1)}</ol>`;
 if(d.pending.status==="unavailable")h+='<div class="msg">Pending-update status could not be verified for this token.</div>';
@@ -146,4 +147,4 @@ x.fillStyle="#8ea1b2";x.font="22px system-ui,sans-serif";x.fillText("Stock token
 c.toBlob(b=>{const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="multiplier-card.png";a.click()})}
 $("f").onsubmit=e=>{e.preventDefault();run()};$("ex").onclick=()=>{$("addr").value=EX};
 proInit();const p=new URLSearchParams(location.search);if(T.includes(p.get("t")))cur=p.get("t");mk();if(p.get("w")){$("addr").value=p.get("w");run()}
-</script></body></html>
+</script><footer id="sxf"></footer><script src="/site.js"></script></body></html>
