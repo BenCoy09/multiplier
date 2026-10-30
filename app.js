@@ -344,7 +344,7 @@ const ROOMS = [...Object.keys(TOK), "GENERAL"], lastPost = {}, hourly = {}, hold
 const URLISH = /(https?:|www\.|t\.me|[a-z0-9-]{2,}\.(com|io|xyz|fun|app|org|net|co|gg|me|ly|eth|win|finance|dev|ai)\b)/i;
 const clean = (t) => String(t || "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim();
 const who = (pass) => crypto.createHash("sha256").update(pass).digest("hex").slice(0, 10);
-const pub = (m) => ({ id: m.id, t: m.t, w: m.w, holder: m.holder, text: m.text, by: m.by });
+const pub = (m) => ({ id: m.id, t: m.t, n: m.n || "", w: m.w, holder: m.holder, text: m.text, by: m.by });
 async function holds(room, wallet) {
   if (!TOK[room]) return false;
   const k = room + wallet, c = holdC[k]; if (c && Date.now() - c.t < 300000) return c.v;
@@ -354,6 +354,7 @@ async function holds(room, wallet) {
 async function postMsg(pass, room, text) {
   if (!okPass(pass)) throw new Error("Pro pass missing or expired.");
   if (!ROOMS.includes(room)) throw new Error("Unknown room.");
+  if (!db.passes[pass].name) throw new Error("Pick a username first.");
   text = clean(text);
   if (!text) throw new Error("Write something first.");
   if (text.length > 240) throw new Error("Keep it under 240 characters.");
@@ -363,7 +364,7 @@ async function postMsg(pass, room, text) {
   const h = (hourly[pass] = (hourly[pass] || []).filter((t) => now - t < 3600000));
   if (h.length >= 30) throw new Error("Hourly limit reached.");
   h.push(now); lastPost[pass] = now;
-  const m = { id: ++db.chat.id, t: Math.floor(now / 1000), w: short(p.from), holder: await holds(room, p.from), text, by: who(pass), rep: [] };
+  const m = { id: ++db.chat.id, t: Math.floor(now / 1000), n: p.name, w: short(p.from), holder: await holds(room, p.from), text, by: who(pass), rep: [] };
   const L = (db.chat.msgs[room] = db.chat.msgs[room] || []); L.push(m); if (L.length > 200) L.shift(); save();
   EE.emit(room, { type: "msg", m: pub(m) }); return m;
 }
@@ -456,6 +457,22 @@ async function tgCheck() {
   } catch (e) { return { ok: false, why: "Could not reach Telegram: " + e.message }; }
 }
 
+// ---- usernames for the rooms ----
+db.names = db.names || {};
+const RESERVED = /(admin|moderator|robinhood|official|support|staff)/i, RESERVED_EXACT = /^(mod|wif|root|system|team)$/i;
+function setName(pass, raw) {
+  if (!okPass(pass)) throw new Error("Pro pass missing or expired.");
+  const n = String(raw || "").trim();
+  if (!/^[A-Za-z0-9_]{3,16}$/.test(n)) throw new Error("Use 3 to 16 letters, numbers or underscores.");
+  if (RESERVED.test(n) || RESERVED_EXACT.test(n)) throw new Error("That name is reserved.");
+  const p = db.passes[pass], k = n.toLowerCase();
+  if (db.names[k] && db.names[k] !== pass) throw new Error("That name is taken.");
+  if (p.name && p.name.toLowerCase() !== k && p.nameAt && Date.now() - p.nameAt < 7 * 864e5) throw new Error("You can change your name once every 7 days.");
+  if (p.name) delete db.names[p.name.toLowerCase()];
+  p.name = n; p.nameAt = Date.now(); db.names[k] = pass; save();
+  return n;
+}
+
 const rd = (f) => require("fs").readFileSync(require("path").join(__dirname, f), "utf8");
 const HTML = rd("index.html"), HOME = rd("home.html"), ROOMSPAGE = rd("rooms.html"), JUDGESPAGE = rd("judges.html");
 const STATIC = { "/logo.svg": [rd("logo.svg"), "image/svg+xml"], "/mark.svg": [rd("mark.svg"), "image/svg+xml"], "/site.css": [rd("site.css"), "text/css; charset=utf-8"], "/site.js": [rd("site.js"), "application/javascript; charset=utf-8"] };
@@ -478,13 +495,14 @@ else http.createServer(async (req, res) => {
     req.on("close", () => { clearInterval(ka); EE.off(room, send); });
     return;
   }
-  if (u.pathname === "/api/chat/post" || u.pathname === "/api/chat/report") {
+  if (u.pathname === "/api/chat/post" || u.pathname === "/api/chat/report" || u.pathname === "/api/chat/name") {
     const send = (c, o) => { res.writeHead(c, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
     let body = ""; req.on("data", (d) => { body += d; if (body.length > 2000) req.destroy(); });
     req.on("end", async () => {
       try {
         const j = JSON.parse(body || "{}"), pass = req.headers["x-pass"];
         if (u.pathname.endsWith("post")) { const m = await postMsg(pass, j.room, j.text); send(200, { ok: true, id: m.id }); }
+        else if (u.pathname.endsWith("name")) { send(200, { name: setName(pass, j.name) }); }
         else { await reportMsg(pass, j.room, j.id); send(200, { ok: true }); }
       } catch (e) { send(400, { error: e.message }); }
     });
@@ -505,7 +523,7 @@ if (["/api/pass-info", "/api/redeem", "/api/pass", "/api/stats", "/api/radar", "
       
 if (u.pathname === "/api/radar") return send(200, radarJson());
       if (u.pathname === "/api/stats") return send(200, await stats());
-      if (u.pathname === "/api/pass") { const p = db.passes[u.searchParams.get("pass")]; return send(200, p && p.exp > Date.now() ? { valid: true, exp: p.exp, wallets: walletsOf(p), tg: !!p.chat, price: PRICE, priceWallet: PRICE_WALLET } : { valid: false }); }
+      if (u.pathname === "/api/pass") { const p = db.passes[u.searchParams.get("pass")]; return send(200, p && p.exp > Date.now() ? { valid: true, exp: p.exp, wallets: walletsOf(p), tg: !!p.chat, price: PRICE, priceWallet: PRICE_WALLET, name: p.name || "", me: who(u.searchParams.get("pass")) } : { valid: false }); }
       const tx = u.searchParams.get("tx") || "";
       if (busy.has(tx)) throw new Error("That transaction is already being checked.");
       busy.add(tx);

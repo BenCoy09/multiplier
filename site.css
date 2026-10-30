@@ -24,3 +24,6 @@ footer.sxf b{color:var(--ink);font:700 15px Georgia,serif}footer.sxf p{max-width
 .msg{border-radius:12px}
 .hero h1 em{background:linear-gradient(transparent 62%,color-mix(in srgb,var(--ac) 22%,transparent) 62%)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+/* explorer page: centre the column instead of hugging the left */
+main:not(.w){max-width:760px;margin-left:auto;margin-right:auto}
+.row,#out,.pro{max-width:none}
