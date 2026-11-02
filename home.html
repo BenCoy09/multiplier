@@ -61,6 +61,53 @@ footer{border-top:1px solid var(--ln);padding:20px 0 36px;font-size:13px;color:v
 <p class="meta">Your token count is typed in here. The explorer reads real wallets from the chain.</p>
 </div>
 </section>
+<section class="sec" id="ring"><h2>See what a multiplier does.</h2>
+<p class="sub2">The ring is your tokens, and they never change. The mint arc is the extra share a multiplier update adds. Drag the ring to turn it.</p>
+<div class="rg">
+<div class="rc" id="rc" role="img" aria-label="A ring for your tokens with a mint arc for the extra share"><img class="rfb" id="rfb" src="/logo.svg" alt="" width="150" height="150"></div>
+<div class="rcp">
+<div class="pill" id="rpre"><button type="button" data-p="0.1718" data-m="1" aria-pressed="true">SPY update</button><button type="button" data-p="0.0775" data-m="1" aria-pressed="false">NVDA update</button><button type="button" data-p="5" data-m="0" aria-pressed="false">+5% (hypothetical)</button></div>
+<label class="tok" for="rs"><span>Extra shares per 100 tokens</span><output id="rv"></output></label>
+<input id="rs" type="range" min="0" max="10" step="0.01" value="0.1718" aria-label="Extra shares in percent">
+<label class="tok" for="rm"><span>Magnify the arc ×100</span><input type="checkbox" id="rm" checked></label>
+<p class="meta" id="rn"></p>
+</div></div></section>
+<style>.rg{display:grid;gap:22px;grid-template-columns:1fr;align-items:center}@media(min-width:860px){.rg{grid-template-columns:1.1fr .9fr}}
+.rc{position:relative;height:340px;border-radius:16px;overflow:hidden;background:radial-gradient(circle at 50% 40%,#16283a,#0b141d 70%);border:1px solid var(--ln);touch-action:pan-y}
+.rc canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}.rc canvas:active{cursor:grabbing}
+.rfb{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:24px}.rcp .pill{margin-bottom:14px}.rcp input[type=checkbox]{width:20px;height:20px;accent-color:var(--ac)}</style>
+<script>
+(function(){
+var box=document.getElementById("rc");if(!box)return;
+var rs=document.getElementById("rs"),rm=document.getElementById("rm"),rv=document.getElementById("rv"),rn=document.getElementById("rn"),pre=document.getElementById("rpre");
+var T=null,R=null,S,C,G,arc,vis=false,raf=0,started=false,rotY=0.5,rotX=-0.25,vy=0,drag=false,lx=0,ly=0,reduce=!!(window.matchMedia&&matchMedia("(prefers-reduced-motion:reduce)").matches);
+function pct(){return parseFloat(rs.value)||0}
+function ang(){var a=pct()/100*(rm.checked?100:1)*Math.PI*2;return Math.max(0.03,Math.min(Math.PI*2,a))}
+function text(){var p=pct(),a=ang();rv.textContent="+"+p.toFixed(3)+"%";rn.textContent=(rm.checked?"Arc drawn at ×100 so you can see it":"Arc drawn at real size")+": "+p.toFixed(3)+"% more shares is about "+Math.round(a*180/Math.PI)+"° of arc."+(p<1&&!rm.checked?" At real size a real update is nearly invisible, which is why this tool exists.":"")}
+function rebuild(){if(!T||!arc)return;arc.geometry.dispose();arc.geometry=new T.TorusGeometry(2.55,0.2,24,96,ang())}
+function size(){var w=box.clientWidth||600,h=box.clientHeight||340;R.setSize(w,h,false);C.aspect=w/h;C.updateProjectionMatrix()}
+function frame(){raf=0;if(!vis||document.hidden)return;if(!drag){if(!reduce)rotY+=0.004;rotY+=vy;vy*=0.94}G.rotation.y=rotY;G.rotation.x=rotX;R.render(S,C);raf=requestAnimationFrame(frame)}
+function kick(){if(!raf&&R&&vis)raf=requestAnimationFrame(frame)}
+function init(){try{T=window.THREE;R=new T.WebGLRenderer({antialias:true,alpha:true});R.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+S=new T.Scene();C=new T.PerspectiveCamera(40,1,0.1,50);C.position.z=8;G=new T.Group();
+var ring=new T.Mesh(new T.TorusGeometry(1.7,0.38,32,96),new T.MeshStandardMaterial({color:0xe8eff5,metalness:0.25,roughness:0.35}));
+arc=new T.Mesh(new T.TorusGeometry(2.55,0.2,24,96,ang()),new T.MeshStandardMaterial({color:0x4fd1b8,emissive:0x1f6f60,metalness:0.2,roughness:0.3}));arc.rotation.z=0.17;
+var dot=new T.Mesh(new T.SphereGeometry(0.42,32,32),new T.MeshStandardMaterial({color:0x4fd1b8,emissive:0x1f6f60,roughness:0.3}));
+G.add(ring);G.add(arc);G.add(dot);S.add(G);S.add(new T.AmbientLight(0xffffff,0.65));var L=new T.DirectionalLight(0xffffff,0.9);L.position.set(3,4,6);S.add(L);
+var c=R.domElement;box.appendChild(c);document.getElementById("rfb").style.display="none";size();window.addEventListener("resize",function(){size();kick()});
+c.addEventListener("pointerdown",function(e){drag=true;lx=e.clientX;ly=e.clientY;vy=0;try{c.setPointerCapture(e.pointerId)}catch(x){}});
+c.addEventListener("pointermove",function(e){if(!drag)return;var dx=e.clientX-lx,dy=e.clientY-ly;lx=e.clientX;ly=e.clientY;rotY+=dx*0.01;rotX=Math.max(-1.1,Math.min(1.1,rotX+dy*0.01));vy=dx*0.002;kick()});
+var up=function(){drag=false};c.addEventListener("pointerup",up);c.addEventListener("pointercancel",up);kick()}catch(e){R=null}}
+function load(){if(window.THREE)return init();var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js";s.async=true;s.onload=init;document.head.appendChild(s)}
+function onVis(v){vis=v;if(v&&!started){started=true;load()}else if(v)kick()}
+if("IntersectionObserver" in window)new IntersectionObserver(function(e){onVis(e[0].isIntersecting)},{threshold:.15}).observe(box);else onVis(true);
+document.addEventListener("visibilitychange",kick);
+rs.oninput=function(){[].forEach.call(pre.children,function(b){b.setAttribute("aria-pressed","false")});text();rebuild();kick()};
+rm.onchange=function(){text();rebuild();kick()};
+pre.onclick=function(e){var b=e.target;if(!b.getAttribute||!b.getAttribute("data-p"))return;[].forEach.call(pre.children,function(x){x.setAttribute("aria-pressed",x===b)});rs.value=b.getAttribute("data-p");rm.checked=b.getAttribute("data-m")==="1";text();rebuild();kick()};
+text();
+})();
+</script>
 <section class="sec" id="radar"><h2>Live radar.</h2>
 <p class="sub2">Multiplier updates read from the chain by this server, refreshed every 30 seconds. An update appears as soon as its event is on-chain, which in the two we checked was about ten minutes before it took effect.</p>
 <div id="rd" class="rd">Reading the chain…</div></section>
