@@ -35,6 +35,7 @@ button:focus-visible,textarea:focus-visible,input:focus-visible,a:focus-visible{
 <div id="cmp"></div>
 <p class="rules"><b>House rules.</b> Not financial advice. No links, no promotions, no impersonation. A <span class="b">holder</span> badge means the wallet that paid for the poster’s pass holds that token right now, read from the chain. The short wallet next to every name stays visible. Three reports from different pass holders hide a message. Rooms are public and may reset when the server restarts.</p>
 </main>
+<script src="/wallet.js"></script>
 <script>
 var RM=["SPY","NVDA","GLD","CRCL","SPCX","GENERAL"],room="SPY",es=null,PASS="",ME="",NAME="",EDIT=false,VALID=false,RD=null,RDAT=0;
 try{PASS=localStorage.getItem("mx_pass")||""}catch(e){}
@@ -63,7 +64,7 @@ $("feed").onclick=function(e){var id=e.target.getAttribute&&e.target.getAttribut
 if(!VALID){alert("Reporting needs a Pro pass.");return}
 fetch("/api/chat/report",{method:"POST",headers:{"x-pass":PASS},body:JSON.stringify({room:room,id:Number(id)})}).then(function(){e.target.textContent="reported";e.target.disabled=true})};
 function cmp(){var c=$("cmp");
-if(!VALID){c.innerHTML='<p class="note" id="note">Read-only. <a href="/app#pro">Unlock Pro by burning $WIF</a> to post. The pass also gives alerts and full holding history.</p>';return}
+if(!VALID){c.innerHTML='<p class="note" id="note">Read-only. <a href="/app#pro">Unlock Pro by burning $WIF</a> to post. The pass also gives alerts and full holding history. <button class="rp" id="ws" type="button" style="margin:0">Already have a pass? Sign in with your wallet</button></p>';$("ws").onclick=walletRestore;return}
 if(!NAME||EDIT){c.innerHTML='<p class="note" id="note"><b>'+(NAME?"Change your name":"Choose a username to start posting")+".</b> 3 to 16 letters, numbers or underscores. Your short wallet stays visible next to it. You can change it once every 7 days.</p>"+'<div class="cmp"><input id="un" maxlength="16" placeholder="Username" value="'+esc(NAME)+'" autocomplete="off" spellcheck="false" aria-label="Username"><button class="go" id="sn" type="button">Save</button></div>';
 $("sn").onclick=saveName;$("un").onkeydown=function(e){if(e.key==="Enter")saveName()};return}
 c.innerHTML='<p class="as">Posting as <b>'+esc(NAME)+'</b> · <button class="rp" id="cn" type="button" style="margin:0">change name</button></p><div class="cmp"><textarea id="tx" maxlength="240" placeholder="Say something (240 characters, no links)" aria-label="Message"></textarea><button class="go" id="sd" type="button">Send</button></div><p class="note" id="note"></p>';

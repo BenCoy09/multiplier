@@ -75,6 +75,7 @@ new IntersectionObserver(function(e,o){if(e[0].isIntersecting){d.className+=" in
 <div id="pro" class="pro"></div><div id="out" aria-live="polite"></div>
 <p class="foot">Data is read live from Robinhood Chain through this server. Shares represented = token balance × multiplier. Historical balances are rebuilt from transfer logs up to the last block at or before the update’s effective time. Anyone opening a shared link can see the wallet address in it.</p>
 </main>
+<script src="/wallet.js"></script>
 <script>
 const T=["SPY","NVDA","GLD","CRCL","SPCX"],TX="https://robinhoodchain.blockscout.com/tx/",EX="0x9f736F87E6293AC1Bd9142E257dbfAC8b7AcF1ae";
 let cur="SPY",last=null;const $=i=>document.getElementById(i);
@@ -113,7 +114,7 @@ b.innerHTML='<details id="pd"><summary>Unlock Pro with $WIF</summary><div id="pb
 $("pd").addEventListener("toggle",function(){if($("pd").open)proInfo()});if(location.hash==="#pro")$("pd").open=true}
 async function proInfo(){var x=$("pb");try{var i=await(await fetch("/api/pass-info")).json();if(i.error)throw new Error(i.error);
 x.innerHTML='<p>Pro shows the wallet’s balance at <b>every</b> multiplier update, exports a CSV and turns on Telegram alerts for the paying wallet. It lasts '+i.days+' days and is unlocked by burning $WIF.</p><p>1. In your own wallet, send <b>'+esc(i.price)+' $WIF</b> to the dead address, which takes it out of circulation:<code>'+i.dead+'</code>Token contract:<code>'+i.token+'</code></p><p>2. Paste the transaction hash here:</p><div class="row"><input id="rtx" placeholder="0x… transaction hash" spellcheck="false" aria-label="Burn transaction hash"><button class="go" id="rgo" type="button">Unlock</button></div><p id="rm" class="m"></p><p class="m">This site never connects to your wallet. It checks the burn on-chain. Whoever submits a burn hash first receives the pass, so redeem right after sending.</p>';
-$("rgo").onclick=redeemTx}catch(e){x.textContent="Could not load unlock details: "+e.message}}
+$("rgo").onclick=redeemTx;oneClick(x,i)}catch(e){x.textContent="Could not load unlock details: "+e.message}}
 async function redeemTx(){var m=$("rm"),t=$("rtx").value.trim();$("rgo").disabled=true;m.textContent="Checking the transaction on-chain…";
 try{var r=await fetch("/api/redeem?tx="+encodeURIComponent(t)),d=await r.json();if(!r.ok)throw new Error(d.error||"Failed");setPass(d.pass);proInit()}
 catch(e){m.textContent=e.message}$("rgo").disabled=false}

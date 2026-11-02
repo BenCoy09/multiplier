@@ -232,7 +232,7 @@ const save = () => { try { fs.writeFileSync(DB, JSON.stringify(db)); } catch (_)
 const wifDec = async () => parseInt(await call(WIF, SEL.decimals), 16);
 const toUnits = (s, d) => { const [a, b = ""] = String(s).split("."); return BigInt(a + (b + "0".repeat(d)).slice(0, d)); };
 const okPass = (p) => !!(p && db.passes[p] && db.passes[p].exp > Date.now());
-async function redeem(tx) {
+async function redeem(tx, sid) {
   if (!/^0x[0-9a-fA-F]{64}$/.test(tx)) throw new Error("That is not a transaction hash.");
   if (db.burns.some((b) => b.tx.toLowerCase() === tx.toLowerCase())) throw new Error("This transaction has already been used.");
   const r = await rpc("eth_getTransactionReceipt", [tx]);
@@ -242,6 +242,7 @@ async function redeem(tx) {
   let paid = 0n, from = null;
   for (const l of r.logs) if (l.address.toLowerCase() === WIF.toLowerCase() && l.topics.length === 3 && l.topics[0] === T_TR && l.topics[2].toLowerCase() === dead) { paid += BigInt(l.data); from = "0x" + l.topics[1].slice(26); }
   if (paid < need) throw new Error("No transfer of at least " + PRICE + " $WIF to the dead address was found in that transaction.");
+  if (sid) { const s = sessions.get(sid); if (!s) throw new Error("Your wallet session expired. Connect again."); if (s.a !== from.toLowerCase()) throw new Error("That burn came from a different wallet than the one you signed in with."); }
   const pass = crypto.randomBytes(16).toString("hex"), exp = Date.now() + DAYS * 864e5;
   db.passes[pass] = { exp, from, tx }; db.burns.push({ tx, from, amount: paid.toString(), t: Date.now() }); save();
   return { pass, exp, from, amount: paid.toString(), decimals: dec };
@@ -473,9 +474,25 @@ function setName(pass, raw) {
   return n;
 }
 
+// ---- wallet sign-in: proves ownership of an address, restores a pass, binds a burn claim to its sender ----
+const eth = require("./eth.js"), SECRET = crypto.randomBytes(32), sessions = new Map();
+const mac = (ts) => crypto.createHmac("sha256", SECRET).update(String(ts)).digest("hex").slice(0, 24);
+const loginMessage = () => { const ts = Date.now(); return "Multiplier Explorer sign-in\nThis only proves you own this wallet. It sends no transaction and costs nothing.\nTime: " + ts + "\nCode: " + mac(ts); };
+function login(addr, message, sig) {
+  const m = /Time: (\d+)\nCode: ([0-9a-f]{24})$/.exec(String(message || ""));
+  if (!m || !message.startsWith("Multiplier Explorer sign-in\n") || m[2] !== mac(m[1])) throw new Error("The sign-in message was not recognised. Try again.");
+  if (Date.now() - Number(m[1]) > 10 * 60000) throw new Error("The sign-in message expired. Try again.");
+  let who; try { who = eth.recover(message, sig).toLowerCase(); } catch (_) { throw new Error("That signature is not valid."); }
+  if (who !== String(addr).toLowerCase()) throw new Error("The signature does not match that wallet.");
+  for (const [k, v] of sessions) if (Date.now() - v.t > 864e5) sessions.delete(k);
+  const sid = crypto.randomBytes(16).toString("hex"); sessions.set(sid, { a: who, t: Date.now() });
+  let best = null; for (const [k, p] of Object.entries(db.passes)) if (p.from && p.from.toLowerCase() === who && p.exp > Date.now() && (!best || p.exp > db.passes[best].exp)) best = k;
+  return { sid, address: who, pass: best || undefined, name: best ? db.passes[best].name || "" : "" };
+}
+
 const rd = (f) => require("fs").readFileSync(require("path").join(__dirname, f), "utf8");
 const HTML = rd("index.html"), HOME = rd("home.html"), ROOMSPAGE = rd("rooms.html"), JUDGESPAGE = rd("judges.html");
-const STATIC = { "/logo.svg": [rd("logo.svg"), "image/svg+xml"], "/mark.svg": [rd("mark.svg"), "image/svg+xml"], "/site.css": [rd("site.css"), "text/css; charset=utf-8"], "/site.js": [rd("site.js"), "application/javascript; charset=utf-8"] };
+const STATIC = { "/logo.svg": [rd("logo.svg"), "image/svg+xml"], "/mark.svg": [rd("mark.svg"), "image/svg+xml"], "/site.css": [rd("site.css"), "text/css; charset=utf-8"], "/site.js": [rd("site.js"), "application/javascript; charset=utf-8"], "/wallet.js": [rd("wallet.js"), "application/javascript; charset=utf-8"] };
 if (process.argv[2] === "verify") verify().catch((e) => { console.error("VERIFY FAILED:", e.message); process.exit(1); });
 else http.createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
@@ -495,13 +512,14 @@ else http.createServer(async (req, res) => {
     req.on("close", () => { clearInterval(ka); EE.off(room, send); });
     return;
   }
-  if (u.pathname === "/api/chat/post" || u.pathname === "/api/chat/report" || u.pathname === "/api/chat/name") {
+  if (u.pathname === "/api/chat/post" || u.pathname === "/api/chat/report" || u.pathname === "/api/chat/name" || u.pathname === "/api/login") {
     const send = (c, o) => { res.writeHead(c, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
     let body = ""; req.on("data", (d) => { body += d; if (body.length > 2000) req.destroy(); });
     req.on("end", async () => {
       try {
         const j = JSON.parse(body || "{}"), pass = req.headers["x-pass"];
         if (u.pathname.endsWith("post")) { const m = await postMsg(pass, j.room, j.text); send(200, { ok: true, id: m.id }); }
+        else if (u.pathname === "/api/login") { send(200, login(j.address, j.message, j.signature)); }
         else if (u.pathname.endsWith("name")) { send(200, { name: setName(pass, j.name) }); }
         else { await reportMsg(pass, j.room, j.id); send(200, { ok: true }); }
       } catch (e) { send(400, { error: e.message }); }
@@ -509,10 +527,11 @@ else http.createServer(async (req, res) => {
     return;
   }
   
-if (["/api/pass-info", "/api/redeem", "/api/pass", "/api/stats", "/api/radar", "/api/health", "/api/renew", "/api/addwallet"].includes(u.pathname)) {
+if (["/api/pass-info", "/api/redeem", "/api/pass", "/api/stats", "/api/radar", "/api/health", "/api/renew", "/api/addwallet", "/api/nonce"].includes(u.pathname)) {
     const send = (c, o) => { res.writeHead(c, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
     try {
       if (u.pathname === "/api/pass-info") return send(200, { token: WIF, dead: DEAD, price: PRICE, decimals: await wifDec(), days: DAYS, bot: BOT_NAME });
+      if (u.pathname === "/api/nonce") return send(200, { message: loginMessage() });
       if (u.pathname === "/api/health") return send(200, { ok: true, telegram: await tgCheck(), burns: db.burns.length, store: UP ? (storeOk ? "external" : "external (not loaded)") : "file", chainTime: radar.now || null });
       if (u.pathname === "/api/renew" || u.pathname === "/api/addwallet") {
         const pass = req.headers["x-pass"], tx = u.searchParams.get("tx") || "";
@@ -527,7 +546,7 @@ if (u.pathname === "/api/radar") return send(200, radarJson());
       const tx = u.searchParams.get("tx") || "";
       if (busy.has(tx)) throw new Error("That transaction is already being checked.");
       busy.add(tx);
-      try { return send(200, await redeem(tx)); } finally { busy.delete(tx); }
+      try { return send(200, await redeem(tx, req.headers["x-sid"])); } finally { busy.delete(tx); }
     } catch (e) { return send(400, { error: e.message }); }
   }
   if (u.pathname === "/api/lookup") {
