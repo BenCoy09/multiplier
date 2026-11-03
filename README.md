@@ -13,6 +13,8 @@ Independent project, not affiliated with Robinhood. Shares represented = token b
 
 - **Home:** a live radar of multiplier updates for SPY, NVDA, GLD, CRCL and SPCX, read from the chain, with a countdown when an update is scheduled. A 3D ring explainer, a replay of a real update, and a calculator.
 - **Explorer (`/app`):** pick a token, enter any wallet address (no wallet needed), and see "Today: N tokens = about M real shares", the balance when the latest update took effect, and every update with its transaction link.
+- **All tokens:** one wallet across SPY, NVDA, GLD, CRCL and SPCX: raw tokens, real shares, last update and next scheduled update.
+- **For builders (`/builders`):** the exact ways Stock Tokens break in other apps, copy-paste patterns, and an open API (`/api/radar`, `/api/lookup`, `/api/portfolio`; GET, no key, CORS enabled).
 - **Rooms (`/rooms`):** a live room per token. Anyone can read. Posting needs a Pro pass and a username. Links are blocked, posts are rate limited, and three reports hide a message.
 - **Telegram alerts:** a bot tells a wallet's owner when an update is scheduled and when it takes effect, only for tokens that wallet holds.
 
