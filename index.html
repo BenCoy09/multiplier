@@ -73,11 +73,11 @@ new IntersectionObserver(function(e,o){if(e[0].isIntersecting){d.className+=" in
 <form class="row" id="f"><input id="addr" placeholder="Wallet address (0x…)" autocomplete="off" spellcheck="false" aria-label="Wallet address"><button class="go" id="go" type="submit">Analyze</button></form>
 <button class="lk" id="ex" type="button">Use example wallet</button>
 <div id="pro" class="pro"></div><div id="out" aria-live="polite"></div>
-<p class="foot">Data is read live from Robinhood Chain through this server. Shares represented = token balance × multiplier. Historical balances are rebuilt from transfer logs up to the last block at or before the update’s effective time. Anyone opening a shared link can see the wallet address in it.</p>
+<p class="foot">Data is read live from Robinhood Chain through this server. Shares represented = token balance × multiplier. Historical balances are rebuilt from transfer logs up to the last block at or before the update’s effective time. Anyone opening a shared link can see the wallet address in it. Stock tokens may not carry the rights of owning the underlying shares and may be restricted in some places; check Robinhood’s own terms.</p>
 </main>
 <script src="/wallet.js"></script>
 <script>
-const T=["SPY","NVDA","GLD","CRCL","SPCX"],TX="https://robinhoodchain.blockscout.com/tx/",EX="0x9f736F87E6293AC1Bd9142E257dbfAC8b7AcF1ae";
+const T=["ALL","SPY","NVDA","GLD","CRCL","SPCX"],TX="https://robinhoodchain.blockscout.com/tx/",EX="0x9f736F87E6293AC1Bd9142E257dbfAC8b7AcF1ae";
 let cur="SPY",last=null;const $=i=>document.getElementById(i);
 function fx(bi,dec,sh=4){sh=Math.min(sh,dec);const ng=bi<0n;if(ng)bi=-bi;const q=10n**BigInt(dec-sh);bi=(bi+q/2n)/q;const s=bi.toString().padStart(sh+1,"0");return(ng?"−":"")+s.slice(0,-sh).replace(/\B(?=(\d{3})+$)/g,",")+(sh?"."+s.slice(-sh):"")}
 const fm=s=>fx(BigInt(s),18,9),dt=e=>new Date(e*1000).toISOString().slice(0,16).replace("T"," ")+" UTC",dd=e=>new Date(e*1000).toISOString().slice(0,10),sh=a=>a.slice(0,6)+"…"+a.slice(-4);
@@ -87,21 +87,22 @@ function tl(ev,sc){return[...ev].sort((a,b)=>b.eff-a.eff).map(e=>`<li${sc?' clas
 async function run(){const w=$("addr").value.trim(),o=$("out");last=null;
 if(!/^0x[0-9a-fA-F]{40}$/.test(w)){o.innerHTML='<div class="msg er">Enter a 42-character wallet address starting with 0x.</div>';return}
 $("go").disabled=true;o.innerHTML='<div class="msg">Reading Robinhood Chain data. Long histories can take a minute.</div>';
-history.replaceState(null,"","?t="+cur+"&w="+w);
+history.replaceState(null,"","?t="+cur+"&w="+w);if(cur==="ALL"){runAll(w);return}
 try{const r=await fetch("/api/lookup?token="+cur+"&wallet="+w+(PASS?"&full=1":""),{headers:PASS?{"x-pass":PASS}:{}}),d=await r.json();if(r.status===401){setPass("");proInit()}if(!r.ok)throw new Error(d.error||"Request failed");render(d,w)}
 catch(e){o.innerHTML=`<div class="msg er"><b>The data could not be retrieved or verified.</b><br>${esc(e.message)}<br>This is an error, not an empty history. Press Analyze to retry.</div>`}
 $("go").disabled=false}
 function render(d,w){const o=$("out"),dec=d.decimals;let h="";
 if(d.events.length){const L=[...d.events].sort((a,b)=>b.eff-a.eff)[0],bn=BigInt(d.balanceNow),sh2=bn*BigInt(L.n)/(10n**18n);h+='<div class="msg" style="border-style:solid;color:var(--ink)"><b>Today:</b> '+fx(bn,dec)+" "+cur+" tokens = about <b>"+fx(sh2,dec)+"</b> real shares, using the multiplier from the latest update.</div>"}
+if(BigInt(d.balanceNow)===0n)h+='<div class="msg"><b>This wallet holds no '+cur+' tokens right now.</b> There is nothing to convert. The update history is below.</div>';
 if(d.partialHistory)h+='<div class="msg er"><b>Partial history.</b> The search did not finish within its time limit, so events shown may be incomplete.</div>';
-if(d.scheduled.length)h+=`<div class="msg"><b>Scheduled update (not yet effective).</b> It is not applied to any figure below.</div><ol>${tl(d.scheduled,1)}</ol>`;
+if(d.scheduled.length)h+=`<div class="msg"><b>Scheduled update (not yet effective).</b> At today’s balance it would change this wallet by about ${(()=>{const s0=[...d.scheduled].sort((x,y)=>x.eff-y.eff)[0],im=BigInt(d.balanceNow)*(BigInt(s0.n)-BigInt(s0.o))/(10n**18n);return(im<0n?"":"+")+fx(im,dec)})()} shares. It is not applied to any figure below.</div><ol>${tl(d.scheduled,1)}</ol>`;
 if(d.pending.status==="unavailable")h+='<div class="msg">Pending-update status could not be verified for this token.</div>';
 if(!d.events.length){h+=d.partialHistory?"":'<div class="msg">No multiplier updates found in the available on-chain history.</div>'}
 else{const e=[...d.events].sort((a,b)=>b.eff-a.eff)[0],a=d.atUpdate;
 if(a&&a.raw!==null){const raw=BigInt(a.raw),o1=BigInt(e.o),n1=BigInt(e.n),E=10n**18n,b=raw*o1/E,af=raw*n1/E,df=af-b,big=(df<0n?"":"+")+fx(df,dec);
 const sent=`On ${dd(e.eff)}, the ${cur} multiplier changed from ${fm(e.o)} to ${fm(e.n)}. At this wallet’s balance at that time (${fx(raw,dec)} tokens), that corresponds to a change of ${fx(df,dec)} underlying shares represented.`;
 last={l1:`${sh(w)} held ${fx(raw,dec)} ${cur} tokens at the update.`,big,ba:`${fx(b,dec)} → ${fx(af,dec)} shares`,sent,cap:`Change in underlying shares, ${dd(e.eff)} update`,neg:df<0n};
-h+=`<div class="card"><p>${esc(last.l1)}</p><div class="big${df<0n?" ng":""}">${big}</div><p class="m">${last.cap}</p><p class="m">${last.ba}</p><p>${sent}</p><p class="m">Balance as of block ${a.block}, the last block at or before the effective time. Method: ${esc(a.method)}. Balance today: ${fx(BigInt(d.balanceNow),dec)} tokens.</p></div>
+h+=`<div class="card"><p><b>Your ${cur} tokens stayed the same. The shares they represent went ${df<0n?"down":"up"} ${(Math.abs(Number(n1-o1))/Number(o1)*100).toFixed(3)}% on ${dd(e.eff)}.</b></p><p>${esc(last.l1)}</p><div class="big${df<0n?" ng":""}">${big}</div><p class="m">${last.cap}</p><p class="m">${last.ba}</p><p>${sent}</p><p class="m">Balance as of block ${a.block}, the last block at or before the effective time. Method: ${esc(a.method)}. Balance today: ${fx(BigInt(d.balanceNow),dec)} tokens.</p></div>
 <div class="acts"><button id="cp">Copy link</button><button id="cd">Download card</button><button disabled title="Not available yet">subscribe in $WIF</button></div>`}
 else h+=`<div class="msg er"><b>Historical balance unavailable.</b> ${esc(a?a.reason:"")} No figure is shown rather than a guess. Balance today: ${fx(BigInt(d.balanceNow),dec)} tokens.</div>`;
 h+=`<h2>Every multiplier change, newest first</h2><ol>${tl(d.events,0)}</ol>`;if(d.perEvent)h+=holdTable(d,w)}
@@ -136,6 +137,14 @@ b.insertAdjacentHTML("beforeend",'<details class="m" id="mg"><summary>Manage you
 $("ab").onclick=function(){act("/api/addwallet?tx="+encodeURIComponent($("at").value.trim())+"&wallet="+encodeURIComponent($("aw").value.trim()))};
 $("rb").onclick=function(){act("/api/renew?tx="+encodeURIComponent($("rt").value.trim()))}}catch(e){}}
 async function act(u){var m=$("mm");m.textContent="Checking the transaction on-chain…";try{var x=await fetch(u,{headers:{"x-pass":PASS}}),d=await x.json();if(!x.ok)throw new Error(d.error||"Failed");proInit()}catch(e){m.textContent=e.message}}
+async function runAll(w){var o=$("out");
+try{var r=await fetch("/api/portfolio?wallet="+w),d=await r.json();if(!r.ok)throw new Error(d.error||"Request failed");
+var E=10n**18n,rows=d.tokens.map(function(t){var bal=BigInt(t.balance),dec=t.decimals,m=t.last?fm(t.last.n):"none found",nx="none";
+if(t.next){var im=bal*(BigInt(t.next.n)-BigInt(t.next.o))/E;nx=dt(t.next.eff)+" ("+(im<0n?"":"+")+fx(im,dec)+" shares)"}
+return"<tr><td><b>"+t.sym+"</b></td><td>"+fx(bal,dec)+"</td><td>"+m+"</td><td>"+(t.shares===null?"unknown":fx(BigInt(t.shares),dec))+"</td><td>"+(t.last?'<a href="'+TX+t.last.tx+'" target="_blank" rel="noopener">'+dd(t.last.eff)+"</a>":"no update found")+"</td><td>"+nx+"</td></tr>"}).join("");
+o.innerHTML='<div class="card"><p><b>'+esc(sh(w))+" across all five stock tokens.</b></p><p class=\"m\">Tokens held are raw balances. Real shares = tokens × the multiplier from the latest update. Where no update was found, the real share count is shown as unknown, not guessed.</p><div class=\"tw\"><table class=\"ht\"><tr><th>Token</th><th>Tokens held</th><th>Multiplier</th><th>Real shares</th><th>Last update</th><th>Next scheduled</th></tr>"+rows+"</table></div></div>"}
+catch(e){o.innerHTML='<div class="msg er"><b>The data could not be retrieved or verified.</b><br>'+esc(e.message)+"<br>This is an error, not an empty wallet. Press Analyze to retry.</div>"}
+$("go").disabled=false}
 function wrap(c,t,x,y,w,lh){let l="";for(const wd of t.split(" ")){const q=l?l+" "+wd:wd;if(c.measureText(q).width>w&&l){c.fillText(l,x,y);y+=lh;l=wd}else l=q}c.fillText(l,x,y)}
 function card(){if(!last)return;const c=document.createElement("canvas");c.width=1200;c.height=630;const x=c.getContext("2d");
 x.fillStyle="#0b141d";x.fillRect(0,0,1200,630);x.fillStyle="#4fd1b8";x.fillRect(0,0,12,630);
@@ -146,6 +155,6 @@ x.fillStyle="#e8eff5";x.font="600 34px ui-monospace,Menlo,monospace";x.fillText(
 x.font="29px system-ui,sans-serif";wrap(x,last.sent,60,450,1080,40);
 x.fillStyle="#8ea1b2";x.font="22px system-ui,sans-serif";x.fillText("Stock token multiplier explorer · Robinhood Chain · "+location.host+location.search.slice(0,60),60,598,1080);
 c.toBlob(b=>{const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="multiplier-card.png";a.click()})}
-$("f").onsubmit=e=>{e.preventDefault();run()};$("ex").onclick=()=>{$("addr").value=EX};
+$("f").onsubmit=e=>{e.preventDefault();run()};$("addr").oninput=function(){if(/^0x[0-9a-fA-F]{40}$/.test($("addr").value.trim())&&!$("go").disabled)run()};$("ex").onclick=()=>{$("addr").value=EX};
 proInit();const p=new URLSearchParams(location.search);if(T.includes(p.get("t")))cur=p.get("t");mk();if(p.get("w")){$("addr").value=p.get("w");run()}
 </script><footer id="sxf"></footer><script src="/site.js"></script></body></html>

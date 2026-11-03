@@ -28,7 +28,7 @@ async function rpc(method, params) {
     const t = Math.max(Date.now(), nextT); nextT = t + GAP; if (t > Date.now()) await sleep(t - Date.now());
     let r;
     try {
-      r = await fetch(RPC, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ jsonrpc: "2.0", id: ++rid, method, params }) });
+      r = await fetch(RPC, { method: "POST", headers: { "content-type": "application/json", "access-control-allow-origin": "*" }, body: JSON.stringify({ jsonrpc: "2.0", id: ++rid, method, params }) });
     } catch (e) { why = e.message; await sleep(500 * 2 ** Math.min(i, 4)); continue; }
     if (r.status === 429 || r.status >= 500) { why = "HTTP " + r.status; const ra = Number(r.headers.get("retry-after")) * 1000; await sleep(ra > 0 ? Math.min(ra, 15000) : 700 * 2 ** Math.min(i, 4)); continue; }
     const j = await r.json();
@@ -275,7 +275,7 @@ function alertText(s, e, kind, wallet, bal, dec) {
   const head = kind === "pre" ? "Scheduled: " : kind === "live" ? "Now effective: " : "Example from a past update: ";
   return head + s + " multiplier " + fxs(BigInt(e.o), 18, 9) + " → " + fxs(BigInt(e.n), 18, 9) + ", effective " + when + ".\nWallet " + short(wallet) + " holds " + fxs(bal, dec) + " " + s + " tokens, which corresponds to " + (ch < 0n ? "" : "+") + fxs(ch, dec) + " underlying shares represented.\n" + (APP_URL ? APP_URL + "/app?t=" + s + "&w=" + wallet + "\n" : "") + "Transaction: https://robinhoodchain.blockscout.com/tx/" + e.tx;
 }
-async function tg(method, body) { const r = await fetch(TG + "/bot" + BOT + "/" + method, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }); return r.json(); }
+async function tg(method, body) { const r = await fetch(TG + "/bot" + BOT + "/" + method, { method: "POST", headers: { "content-type": "application/json", "access-control-allow-origin": "*" }, body: JSON.stringify(body) }); return r.json(); }
 const say = (chat, text) => tg("sendMessage", { chat_id: chat, text, disable_web_page_preview: true }).catch(() => {});
 async function sendExample(p, chat) {
   for (const s of Object.keys(TOK)) {
@@ -490,8 +490,19 @@ function login(addr, message, sig) {
   return { sid, address: who, pass: best || undefined, name: best ? db.passes[best].name || "" : "" };
 }
 
+// ---- portfolio: one wallet across all five tokens (reads the radar's known updates, so it is cheap) ----
+async function portfolio(w) {
+  const now = radar.now || Math.floor(Date.now() / 1000);
+  const tokens = await Promise.all(Object.keys(TOK).map(async (s) => {
+    const [dec, bal] = await Promise.all([decOf(s), call(TOK[s], SEL.balanceOf + pad32(w)).then((x) => BigInt(x))]);
+    const ev = radar.ev[s], past = ev.filter((e) => e.eff <= now), next = ev.filter((e) => e.eff > now)[0] || null, last = past[past.length - 1] || null;
+    return { sym: s, decimals: dec, balance: bal.toString(), shares: last ? ((bal * BigInt(last.n)) / ONE18).toString() : null, last, next, complete: !!radar.full[s] };
+  }));
+  return { wallet: w, now, tokens };
+}
+
 const rd = (f) => require("fs").readFileSync(require("path").join(__dirname, f), "utf8");
-const HTML = rd("index.html"), HOME = rd("home.html"), ROOMSPAGE = rd("rooms.html"), JUDGESPAGE = rd("judges.html");
+const HTML = rd("index.html"), HOME = rd("home.html"), ROOMSPAGE = rd("rooms.html"), JUDGESPAGE = rd("judges.html"), BUILDERSPAGE = rd("builders.html");
 const STATIC = { "/logo.svg": [rd("logo.svg"), "image/svg+xml"], "/mark.svg": [rd("mark.svg"), "image/svg+xml"], "/site.css": [rd("site.css"), "text/css; charset=utf-8"], "/site.js": [rd("site.js"), "application/javascript; charset=utf-8"], "/wallet.js": [rd("wallet.js"), "application/javascript; charset=utf-8"] };
 if (process.argv[2] === "verify") verify().catch((e) => { console.error("VERIFY FAILED:", e.message); process.exit(1); });
 else http.createServer(async (req, res) => {
@@ -499,6 +510,7 @@ else http.createServer(async (req, res) => {
   if (u.pathname === "/") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(HOME); }
   if (u.pathname === "/rooms") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(ROOMSPAGE); }
   if (STATIC[u.pathname]) { res.writeHead(200, { "content-type": STATIC[u.pathname][1], "cache-control": "public, max-age=300" }); return res.end(STATIC[u.pathname][0]); }
+  if (u.pathname === "/builders") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(BUILDERSPAGE); }
   if (u.pathname === "/judges") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(JUDGESPAGE); }
   if (u.pathname === "/app") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(HTML); }
   if (u.pathname === "/api/chat/stream") {
@@ -513,7 +525,7 @@ else http.createServer(async (req, res) => {
     return;
   }
   if (u.pathname === "/api/chat/post" || u.pathname === "/api/chat/report" || u.pathname === "/api/chat/name" || u.pathname === "/api/login") {
-    const send = (c, o) => { res.writeHead(c, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
+    const send = (c, o) => { res.writeHead(c, { "content-type": "application/json", "access-control-allow-origin": "*" }); res.end(JSON.stringify(o)); };
     let body = ""; req.on("data", (d) => { body += d; if (body.length > 2000) req.destroy(); });
     req.on("end", async () => {
       try {
@@ -527,10 +539,11 @@ else http.createServer(async (req, res) => {
     return;
   }
   
-if (["/api/pass-info", "/api/redeem", "/api/pass", "/api/stats", "/api/radar", "/api/health", "/api/renew", "/api/addwallet", "/api/nonce"].includes(u.pathname)) {
-    const send = (c, o) => { res.writeHead(c, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
+if (["/api/pass-info", "/api/redeem", "/api/pass", "/api/stats", "/api/radar", "/api/health", "/api/renew", "/api/addwallet", "/api/nonce", "/api/portfolio"].includes(u.pathname)) {
+    const send = (c, o) => { res.writeHead(c, { "content-type": "application/json", "access-control-allow-origin": "*" }); res.end(JSON.stringify(o)); };
     try {
       if (u.pathname === "/api/pass-info") return send(200, { token: WIF, dead: DEAD, price: PRICE, decimals: await wifDec(), days: DAYS, bot: BOT_NAME });
+      if (u.pathname === "/api/portfolio") { const w = u.searchParams.get("wallet") || ""; if (!/^0x[0-9a-fA-F]{40}$/.test(w)) throw new Error("Invalid wallet address"); return send(200, await portfolio(w)); }
       if (u.pathname === "/api/nonce") return send(200, { message: loginMessage() });
       if (u.pathname === "/api/health") return send(200, { ok: true, telegram: await tgCheck(), burns: db.burns.length, store: UP ? (storeOk ? "external" : "external (not loaded)") : "file", chainTime: radar.now || null });
       if (u.pathname === "/api/renew" || u.pathname === "/api/addwallet") {
@@ -551,7 +564,7 @@ if (u.pathname === "/api/radar") return send(200, radarJson());
   }
   if (u.pathname === "/api/lookup") {
     const t = u.searchParams.get("token"), w = u.searchParams.get("wallet") || "";
-    const send = (c, o) => { res.writeHead(c, { "content-type": "application/json" }); res.end(JSON.stringify(o)); };
+    const send = (c, o) => { res.writeHead(c, { "content-type": "application/json", "access-control-allow-origin": "*" }); res.end(JSON.stringify(o)); };
     if (!TOK[t]) return send(400, { error: "Unknown token" });
     if (!/^0x[0-9a-fA-F]{40}$/.test(w)) return send(400, { error: "Invalid wallet address" });
     const wantPro = u.searchParams.get("full") === "1";

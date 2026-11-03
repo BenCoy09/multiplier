@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>For builders · Multiplier Explorer</title>
+<style>
+:root{--bg:#f4f5f1;--pn:#fff;--ink:#0f141b;--mu:#58626e;--ln:#d8dcd4;--ac:#0b6e5f;--hi:#d3f0e6;--ng:#b3412e;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0b141d;--pn:#112030;--ink:#e8eff5;--mu:#8ea1b2;--ln:#22333f;--ac:#4fd1b8;--hi:#12392f;--ng:#f08a77}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}
+.w{max-width:780px;margin:0 auto;padding:0 18px}h1{font:400 clamp(32px,6vw,46px)/1.05 Georgia,serif;letter-spacing:-.02em;margin:28px 0 8px}
+h2{font:700 18px system-ui;margin:34px 0 8px}.mu{color:var(--mu)}a{color:var(--ac)}li{margin:6px 0}
+pre{background:var(--pn);border:1px solid var(--ln);border-radius:10px;padding:14px;overflow-x:auto;font:13px/1.55 ui-monospace,Menlo,monospace;margin:10px 0}code{font:13px ui-monospace,Menlo,monospace}
+table{border-collapse:collapse;width:100%;font-size:14px;margin:10px 0}td,th{border-top:1px solid var(--ln);padding:9px 8px;text-align:left;vertical-align:top}th{color:var(--mu);font-weight:600}td code{overflow-wrap:anywhere}
+.tip{background:var(--hi);border-radius:10px;padding:12px 14px;margin:14px 0}
+</style><link rel="icon" href="/mark.svg" type="image/svg+xml"><link rel="stylesheet" href="/site.css"></head><body>
+<header id="sx"></header>
+<main class="w">
+<h1>For builders.</h1>
+<p class="mu">Most apps treat Robinhood Chain stock tokens like ordinary ERC-20s. This is the exact place that breaks, how to read them correctly, and an open API you can call instead of rebuilding it.</p>
+<div class="tip"><b>The one idea.</b> A stock token’s balance can stay the same while the real shares it stands for change, because a <b>multiplier</b> changes. Real shares = raw balance × multiplier ÷ 1e18.</div>
+<h2>What to read</h2>
+<ul>
+<li><b>Raw amount:</b> the <code>value</code> in <code>Transfer</code> events. We reconcile <code>balanceOf</code> against transfer history and treat it as raw.</li>
+<li><b>Scaled amount:</b> <code>TransferWithScaledUI</code> also carries <code>uiValue</code>, which equals raw × multiplier. Both events are emitted for one transfer, so <b>never add them together</b>.</li>
+<li><b>Multiplier changes:</b> the <code>UIMultiplierUpdated</code> event. It carries the time the change takes <b>effect</b>, which is later than when the event is emitted (about ten minutes in both updates we checked). Use the effective time.</li>
+</ul>
+<table>
+<tr><th>Event</th><th>Signature and topic0</th></tr>
+<tr><td><code>UIMultiplierUpdated</code></td><td><code>UIMultiplierUpdated(uint256 old, uint256 new, uint256 effectiveAt)</code> · no indexed arguments<br><code>0x2205df4534432b2f60654a3fdb48737ffdaf3e9edb1a498bd985bc026b15b055</code></td></tr>
+<tr><td><code>TransferWithScaledUI</code></td><td><code>TransferWithScaledUI(address indexed from, address indexed to, uint256 value, uint256 uiValue)</code><br><code>0x37e7f0db430edc9dd31bc66f25f8449353aa0818f503b906747dd8f286cd3802</code></td></tr>
+</table>
+<h2>Four ways it goes wrong</h2>
+<ul>
+<li><b>Floating point.</b> Multipliers have 18 decimals. JavaScript <code>Number</code> silently loses precision. Use <code>BigInt</code>.</li>
+<li><b>Emit time versus effective time.</b> Applying a change when the event appears is wrong. Wait for <code>effectiveAt</code>.</li>
+<li><b>Double counting.</b> Summing <code>Transfer</code> and <code>TransferWithScaledUI</code> counts every transfer twice.</li>
+<li><b>Prices.</b> As we read <a href="https://docs.robinhood.com/chain/building-with-stock-tokens/" target="_blank" rel="noopener">Robinhood’s stock-token docs</a>, the oracle price already includes the multiplier. Applying it again double counts. Check the docs for the feed you use.</li>
+</ul>
+<h2>Copy-paste patterns</h2>
+<p class="mu">Real shares, exactly:</p>
+<pre>const shares = raw * newMultiplier / 10n ** 18n;      // BigInt, never Number
+const change = raw * (newMultiplier - oldMultiplier) / 10n ** 18n;</pre>
+<p class="mu">Read every multiplier update with plain JSON-RPC:</p>
+<pre>const TOPIC = "0x2205df4534432b2f60654a3fdb48737ffdaf3e9edb1a498bd985bc026b15b055";
+const logs = await rpc("eth_getLogs", [{ address: TOKEN, topics: [TOPIC], fromBlock: "0x0", toBlock: "latest" }]);
+const [oldM, newM, effectiveAt] = [0, 1, 2].map((i) =&gt;
+  BigInt("0x" + logs[0].data.slice(2 + 64 * i, 66 + 64 * i)));   // effectiveAt is a unix time in seconds</pre>
+<p class="mu">Public RPCs limit <code>eth_getLogs</code> ranges and rates, so be ready to split the range and retry. This tool does that for you.</p>
+<h2>Open API (GET, no key, CORS enabled)</h2>
+<table>
+<tr><th>Endpoint</th><th>Returns</th></tr>
+<tr><td><code>/api/radar</code></td><td>Every known multiplier update for SPY, NVDA, GLD, CRCL and SPCX, with chain time, so you can tell scheduled from past. Fields: <code>now</code>, <code>tokens[].sym</code>, <code>tokens[].events[]</code> (<code>o</code>, <code>n</code>, <code>eff</code>, <code>tx</code>, <code>block</code>).</td></tr>
+<tr><td><code>/api/lookup?token=SPY&amp;wallet=0x…</code></td><td>One wallet and one token: <code>balanceNow</code> (raw), <code>decimals</code>, <code>events</code>, <code>scheduled</code>, and the balance at the latest update in <code>atUpdate</code>.</td></tr>
+<tr><td><code>/api/portfolio?wallet=0x…</code></td><td>One wallet across all five tokens: raw balance, current real shares, last update, next scheduled update.</td></tr>
+</table>
+<pre>fetch("/api/portfolio?wallet=0x9f736F87E6293AC1Bd9142E257dbfAC8b7AcF1ae")
+  .then(r =&gt; r.json()).then(console.log)</pre>
+<p class="mu">Numbers are strings holding integers, so nothing is rounded for you. Shared RPC behind this: be kind with request rates. Code and notes: <a href="https://github.com/BenCoy09/multiplier">github.com/BenCoy09/multiplier</a>.</p>
+<p class="mu">Stock tokens may not carry the rights of owning the underlying shares and may be restricted in some places. Check Robinhood’s own terms. Independent project, not affiliated with Robinhood.</p>
+</main>
+<footer id="sxf"></footer><script src="/site.js"></script></body></html>
