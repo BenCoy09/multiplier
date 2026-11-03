@@ -44,22 +44,17 @@ const call = (to, data, block = "latest") => rpc("eth_call", [{ to, data }, bloc
 
 // eth_getLogs over [from,to]. Shrinks the window until the node accepts it, then sweeps. Never hides a failure.
 async function getLogs(base, from, to, deadline) {
+  // Splits any window the node refuses (too many blocks, or more than 10,000 results) and retries both halves. Never hides a failure.
   const q = (a, b) => rpc("eth_getLogs", [{ ...base, fromBlock: hex(a), toBlock: hex(b) }]);
-  let size = to - from + 1, first;
-  for (;;) {
-    try { first = await q(from, Math.min(to, from + size - 1)); break; }
-    catch (e) { if (!e.rpc || size <= 1000) throw e; size = Math.max(1000, Math.floor(size / 4)); }
+  const SPAN = 6000000, logs = [], ranges = []; let partial = false, calls = 0, i = 0;
+  for (let a = from; a <= to; a += SPAN) ranges.push([a, Math.min(to, a + SPAN - 1)]);
+  async function walk(a, b) {
+    if (Date.now() > deadline) { partial = true; return; }
+    try { calls++; logs.push(...(await q(a, b))); }
+    catch (e) { if (!e.rpc || a >= b) throw e; const m = Math.floor((a + b) / 2); await walk(a, m); await walk(m + 1, b); }
   }
-  const logs = [...first], ranges = [];
-  for (let a = from + size; a <= to; a += size) ranges.push([a, Math.min(to, a + size - 1)]);
-  let i = 0, partial = false;
-  await Promise.all(Array.from({ length: 3 }, async () => {
-    while (i < ranges.length) {
-      if (Date.now() > deadline) { partial = true; return; }
-      const [x, y] = ranges[i++]; logs.push(...(await q(x, y)));
-    }
-  }));
-  return { logs, partial, size, calls: ranges.length + 1 };
+  await Promise.all(Array.from({ length: 3 }, async () => { while (i < ranges.length) { const [a, b] = ranges[i++]; await walk(a, b); } }));
+  return { logs, partial, size: SPAN, calls };
 }
 
 const hcache = {};
@@ -157,6 +152,7 @@ async function lookup(sym, w, pro) {
       atUpdate = raw === null ? { raw: null, reason: "The transfer history could not be read completely within the time limit." } : { raw: raw.toString(), block, method };
     } catch (err) { atUpdate = { raw: null, reason: "Reading the historical balance failed: " + err.message + "." }; }
   }
+  let mult = null; try { mult = BigInt(await call(tk, SEL.ui)).toString(); } catch (_) {}
   let perEvent;
   if (pro && events.length) { // Pro: balance at every update
     perEvent = [];
@@ -171,7 +167,7 @@ async function lookup(sym, w, pro) {
       perEvent.push({ eff: events[i].eff, block: blocks[i], raw: raw === null ? null : raw.toString() });
     }
   }
-  return { token: sym, chainId: cid, latestBlock: latest, decimals, balanceNow, events, scheduled, pending, partialHistory: H.partial, atUpdate, perEvent };
+  return { token: sym, chainId: cid, latestBlock: latest, decimals, balanceNow, events, scheduled, pending, partialHistory: H.partial, atUpdate, perEvent, mult };
 }
 
 async function verify() {
@@ -494,9 +490,9 @@ function login(addr, message, sig) {
 async function portfolio(w) {
   const now = radar.now || Math.floor(Date.now() / 1000);
   const tokens = await Promise.all(Object.keys(TOK).map(async (s) => {
-    const [dec, bal] = await Promise.all([decOf(s), call(TOK[s], SEL.balanceOf + pad32(w)).then((x) => BigInt(x))]);
+    const [dec, bal, mu] = await Promise.all([decOf(s), call(TOK[s], SEL.balanceOf + pad32(w)).then((x) => BigInt(x)), call(TOK[s], SEL.ui).then((x) => BigInt(x)).catch(() => null)]);
     const ev = radar.ev[s], past = ev.filter((e) => e.eff <= now), next = ev.filter((e) => e.eff > now)[0] || null, last = past[past.length - 1] || null;
-    return { sym: s, decimals: dec, balance: bal.toString(), shares: last ? ((bal * BigInt(last.n)) / ONE18).toString() : null, last, next, complete: !!radar.full[s] };
+    return { sym: s, decimals: dec, balance: bal.toString(), shares: mu !== null ? ((bal * mu) / ONE18).toString() : last ? ((bal * BigInt(last.n)) / ONE18).toString() : null, mult: mu === null ? null : mu.toString(), last, next, complete: !!radar.full[s] };
   }));
   return { wallet: w, now, tokens };
 }

@@ -27,6 +27,12 @@ table{border-collapse:collapse;width:100%;font-size:14px;margin:10px 0}td,th{bor
 <tr><td><code>UIMultiplierUpdated</code></td><td><code>UIMultiplierUpdated(uint256 old, uint256 new, uint256 effectiveAt)</code> · no indexed arguments<br><code>0x2205df4534432b2f60654a3fdb48737ffdaf3e9edb1a498bd985bc026b15b055</code></td></tr>
 <tr><td><code>TransferWithScaledUI</code></td><td><code>TransferWithScaledUI(address indexed from, address indexed to, uint256 value, uint256 uiValue)</code><br><code>0x37e7f0db430edc9dd31bc66f25f8449353aa0818f503b906747dd8f286cd3802</code></td></tr>
 </table>
+<h2>Verified on mainnet</h2>
+<ul>
+<li>All five tokens expose <code>uiMultiplier()</code>, <code>newUIMultiplier()</code> and <code>effectiveAt()</code>. <code>uiMultiplier()</code> is the current multiplier.</li>
+<li>After an update takes effect, <code>newUIMultiplier()</code> equals the current multiplier and <code>effectiveAt()</code> holds that update’s effective time. A token that has never been updated reports exactly 1.0 and an <code>effectiveAt</code> of 0.</li>
+<li>The multiplier from <code>uiMultiplier()</code> matched the newest <code>UIMultiplierUpdated</code> event on both tokens that have been updated (SPY and NVDA).</li>
+</ul>
 <h2>Four ways it goes wrong</h2>
 <ul>
 <li><b>Floating point.</b> Multipliers have 18 decimals. JavaScript <code>Number</code> silently loses precision. Use <code>BigInt</code>.</li>
@@ -43,7 +49,7 @@ const change = raw * (newMultiplier - oldMultiplier) / 10n ** 18n;</pre>
 const logs = await rpc("eth_getLogs", [{ address: TOKEN, topics: [TOPIC], fromBlock: "0x0", toBlock: "latest" }]);
 const [oldM, newM, effectiveAt] = [0, 1, 2].map((i) =&gt;
   BigInt("0x" + logs[0].data.slice(2 + 64 * i, 66 + 64 * i)));   // effectiveAt is a unix time in seconds</pre>
-<p class="mu">Public RPCs limit <code>eth_getLogs</code> ranges and rates, so be ready to split the range and retry. This tool does that for you.</p>
+<p class="mu">The public RPC allows at most 10,000,000 blocks and 10,000 results per <code>eth_getLogs</code> call (we measured this), so split ranges and retry. This tool does that for you.</p>
 <h2>Open API (GET, no key, CORS enabled)</h2>
 <table>
 <tr><th>Endpoint</th><th>Returns</th></tr>
