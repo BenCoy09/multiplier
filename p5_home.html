@@ -1,0 +1,20 @@
+<section class="sec" id="radar"><h2>Live radar.</h2>
+<p class="sub2">Multiplier updates read from the chain by this server, refreshed every 30 seconds. An update appears as soon as its event is on-chain, which in the two we checked was about ten minutes before it took effect.</p>
+<div id="rd" class="rd">Reading the chain…</div></section>
+<style>.sub2{color:var(--mu);margin:-12px 0 18px;max-width:62ch}.rd .r{display:grid;grid-template-columns:64px 1fr;gap:6px 12px;padding:14px 0;border-top:1px solid var(--ln)}.rd b{font:700 15px ui-monospace,Menlo,monospace}.rd .s{color:var(--mu);font:13px ui-monospace,Menlo,monospace;overflow-wrap:anywhere}.rd .s a{color:var(--ac)}.rd mark{padding:1px 6px}</style>
+<script>
+(function(){var el=document.getElementById("rd"),D=null,at=0,TX="https://robinhoodchain.blockscout.com/tx/";
+function f9(s){var b=BigInt(s),q=10n**9n;b=(b+q/2n)/q;var t=b.toString();while(t.length<10)t="0"+t;return t.slice(0,-9)+"."+t.slice(-9)}
+function cd(s){s=Math.max(0,s);var m=Math.floor(s/60),x=s%60;return(m<10?"0":"")+m+":"+(x<10?"0":"")+x}
+function now(){return D.now+Math.floor((Date.now()-at)/1000)}
+function draw(){if(!D){return}var n=now(),h="";
+D.tokens.forEach(function(t){var past=t.events.filter(function(e){return e.eff<=n}),sch=t.events.filter(function(e){return e.eff>n}),st="";
+if(sch.length){st=sch.map(function(e){return"<mark>SCHEDULED</mark> "+f9(e.o)+" → "+f9(e.n)+" in "+cd(e.eff-n)+' · <a href="'+TX+e.tx+'" target="_blank" rel="noopener">transaction</a>'}).join("<br>")}
+else if(past.length){var e=past[past.length-1];st="Last update "+new Date(e.eff*1000).toISOString().slice(0,10)+": "+f9(e.o)+" → "+f9(e.n)+' · <a href="'+TX+e.tx+'" target="_blank" rel="noopener">transaction</a>'}
+else st=t.complete?"No multiplier updates found in the on-chain history.":"No updates found so far. The full history scan is still running.";
+h+='<div class="r"><b>'+t.sym+'</b><div class="s">'+st+"</div></div>"});
+if(D.error)h+='<p class="s">Chain read problem: '+D.error+". Showing the last known data.</p>";
+el.innerHTML=h}
+function load(){fetch("/api/radar").then(function(r){return r.json()}).then(function(d){D=d;at=Date.now();draw()}).catch(function(){if(!D)el.textContent="The radar is unavailable right now."})}
+load();setInterval(load,30000);setInterval(draw,1000)})();
+</script>

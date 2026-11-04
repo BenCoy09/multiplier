@@ -1,0 +1,11 @@
+<section class="sec" id="wif"><h2>Pro is unlocked by burning $WIF.</h2>
+<div class="g3"><div><b>FREE</b><h3>Any wallet, latest update</h3><p>See what the most recent multiplier update meant for any holder, with the transaction link.</p></div><div><b>PRO · 30 DAYS</b><h3>Every update, plus CSV</h3><p>The wallet’s balance at each update, and a download. Unlock by sending $WIF to the dead address.</p></div><div><b>THE LOOP</b><h3>Passes expire, burns repeat</h3><p>Pro lasts 30 days, so regular users come back and burn again. Each burn is checked on-chain and listed here.</p></div></div>
+<p class="meta" id="bs">Loading burn totals…</p><p><a class="btn o" href="/app#pro">Unlock in the explorer</a></p></section>
+<script>
+(function(){var el=document.getElementById("bs");
+fetch("/api/stats").then(function(r){return r.json()}).then(function(s){
+if(s.error||s.decimals==null){el.textContent="Burn totals are unavailable right now.";return}
+var w=BigInt(s.burned)/(10n**BigInt(s.decimals));
+el.innerHTML=s.count?"Burned through this app: "+w.toString()+" $WIF in "+s.count+" unlock"+(s.count>1?"s":"")+". Recent: "+s.recent.map(function(x){return'<a href="https://robinhoodchain.blockscout.com/tx/'+x.tx+'" target="_blank" rel="noopener">'+x.tx.slice(0,10)+"…</a>"}).join(", "):"No burns yet. Every unlock will be listed here with its transaction."
+}).catch(function(){el.textContent="Burn totals are unavailable right now."})})();
+</script>

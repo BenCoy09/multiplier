@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rooms · Multiplier Explorer</title>
+<style>
+:root{--bg:#f4f5f1;--pn:#fff;--ink:#0f141b;--mu:#58626e;--ln:#d8dcd4;--ac:#0b6e5f;--hi:#d3f0e6;--ng:#b3412e;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0b141d;--pn:#112030;--ink:#e8eff5;--mu:#8ea1b2;--ln:#22333f;--ac:#4fd1b8;--hi:#12392f;--ng:#f08a77}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+.w{max-width:760px;margin:0 auto;padding:0 18px}header{border-bottom:1px solid var(--ln)}.hd{display:flex;justify-content:space-between;align-items:center;padding:16px 0}
+.wm{font:700 17px Georgia,serif}nav{display:flex;gap:16px;font-size:14px}nav a{color:var(--mu);text-decoration:none}
+h1{font:400 clamp(30px,6vw,44px)/1.05 Georgia,serif;letter-spacing:-.02em;margin:26px 0 8px}.sub{color:var(--mu);margin:0 0 16px;font-size:14px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}.tabs button{border:1px solid var(--ln);background:var(--pn);color:var(--ink);padding:8px 14px;border-radius:999px;font:600 13px system-ui;cursor:pointer}
+.tabs button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.pin{background:var(--pn);border:1px solid var(--ln);border-radius:10px;padding:10px 12px;font:13px ui-monospace,Menlo,monospace;color:var(--mu);margin-bottom:10px;overflow-wrap:anywhere}.pin mark{background:var(--hi);color:var(--ac);padding:0 5px;border-radius:3px}
+#feed{height:min(52vh,460px);overflow-y:auto;background:var(--pn);border:1px solid var(--ln);border-radius:10px;padding:6px 14px}
+.m{padding:10px 0;border-bottom:1px solid var(--ln)}.m:last-child{border:0}.mh{font:12px ui-monospace,Menlo,monospace;color:var(--mu);display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.b{background:var(--hi);color:var(--ac);padding:1px 6px;border-radius:4px;font-weight:700}.m p{margin:3px 0 0;overflow-wrap:anywhere}.me .mh b{color:var(--ac)}
+.rp{margin-left:auto;background:none;border:0;color:var(--mu);font:12px system-ui;cursor:pointer;text-decoration:underline}
+.empty{color:var(--mu);padding:18px 0;font-size:14px}
+.cmp{display:flex;gap:8px;margin-top:10px}textarea{flex:1;min-height:46px;padding:10px;border:1px solid var(--ln);border-radius:8px;background:var(--pn);color:var(--ink);font:15px system-ui;resize:none}
+.go{border:0;background:var(--ink);color:var(--bg);padding:0 18px;border-radius:8px;font:600 15px system-ui;cursor:pointer}.go:disabled{opacity:.5}
+.note{margin:10px 0 0;font-size:13px;color:var(--mu)}.note a{color:var(--ac)}.er{color:var(--ng)}
+.rules{margin:18px 0 40px;font-size:13px;color:var(--mu);border-top:1px solid var(--ln);padding-top:14px}
+button:focus-visible,textarea:focus-visible,a:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+</style></head><body>
+<header><div class="w hd"><span class="wm">Multiplier Explorer</span><nav><a href="/">Home</a><a href="/app">Explorer</a><a href="/rooms">Rooms</a></nav></div></header>
+<main class="w">
+<h1>Rooms.</h1>
+<p class="sub">One room per stock token, anchored to its live multiplier status. Anyone can read. Posting needs a Pro pass, so everyone who posts has burned $WIF.</p>
+<div class="tabs" id="tabs" role="group" aria-label="Room"></div>
+<div class="pin" id="pin">Loading…</div>
+<div id="feed" aria-live="polite"></div>
+<div id="cmp"></div>
+<p class="rules"><b>House rules.</b> Not financial advice. No links, no promotions, no impersonation. A <span class="b">holder</span> badge means the wallet that paid for the poster’s pass holds that token right now, read from the chain. Three reports from different pass holders hide a message. Rooms are public and may reset when the server restarts.</p>
+</main>
+<script>
+var RM=["SPY","NVDA","GLD","CRCL","SPCX","GENERAL"],room="SPY",es=null,PASS="",ME="",VALID=false,RD=null,RDAT=0;
+try{PASS=localStorage.getItem("mx_pass")||""}catch(e){}
+var $=function(i){return document.getElementById(i)},esc=function(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})};
+function f9(s){var b=BigInt(s),q=10n**9n;b=(b+q/2n)/q;var t=b.toString();while(t.length<10)t="0"+t;return t.slice(0,-9)+"."+t.slice(-9)}
+function cd(s){s=Math.max(0,s);var m=Math.floor(s/60),x=s%60;return(m<10?"0":"")+m+":"+(x<10?"0":"")+x}
+function tabs(){$("tabs").innerHTML=RM.map(function(r){return'<button type="button" data-r="'+r+'" aria-pressed="'+(r===room)+'">'+(r==="GENERAL"?"General":r)+"</button>"}).join("");
+[].forEach.call($("tabs").children,function(b){b.onclick=function(){room=b.getAttribute("data-r");tabs();open();pin()}})}
+function pin(){var el=$("pin");if(room==="GENERAL"){el.textContent="General room. Talk about multipliers, corporate actions and what the tool should show next.";return}
+if(!RD){el.textContent="Reading the chain…";return}
+var n=RD.now+Math.floor((Date.now()-RDAT)/1000),t=RD.tokens.filter(function(x){return x.sym===room})[0],ev=t?t.events:[],sch=ev.filter(function(e){return e.eff>n}),past=ev.filter(function(e){return e.eff<=n});
+if(sch.length)el.innerHTML="<mark>SCHEDULED</mark> "+room+" "+f9(sch[0].o)+" → "+f9(sch[0].n)+" in "+cd(sch[0].eff-n);
+else if(past.length){var e=past[past.length-1];el.textContent=room+" last update "+new Date(e.eff*1000).toISOString().slice(0,10)+": "+f9(e.o)+" → "+f9(e.n)+". No update is scheduled."}
+else el.textContent=room+": no multiplier updates found so far."}
+function hm(t){return new Date(t*1000).toISOString().slice(11,16)+" UTC"}
+function line(m){return'<div class="m'+(m.by===ME?" me":"")+'" data-id="'+m.id+'"><div class="mh"><b>'+esc(m.w)+"</b>"+(m.holder?'<span class="b">holder</span>':"")+"<span>"+hm(m.t)+'</span><button class="rp" data-id="'+m.id+'" type="button">report</button></div><p>'+esc(m.text)+"</p></div>"}
+function bottom(){var f=$("feed");f.scrollTop=f.scrollHeight}
+function open(){if(es)es.close();$("feed").innerHTML='<div class="empty">Connecting…</div>';
+es=new EventSource("/api/chat/stream?room="+room);
+es.onmessage=function(e){var d=JSON.parse(e.data),f=$("feed");
+if(d.type==="init"){f.innerHTML=d.msgs.length?d.msgs.map(line).join(""):'<div class="empty">No messages yet in this room. Nothing here is simulated: the first message will be a real person.</div>';bottom()}
+else if(d.type==="msg"){var em=f.querySelector(".empty");if(em)em.remove();f.insertAdjacentHTML("beforeend",line(d.m));bottom()}
+else if(d.type==="hide"){var x=f.querySelector('[data-id="'+d.id+'"]');if(x)x.remove()}}}
+$("feed").onclick=function(e){var id=e.target.getAttribute&&e.target.getAttribute("data-id");if(!id||!e.target.classList.contains("rp"))return;
+if(!VALID){$("note").innerHTML='<span class="er">Reporting needs a Pro pass.</span>';return}
+fetch("/api/chat/report",{method:"POST",headers:{"x-pass":PASS},body:JSON.stringify({room:room,id:Number(id)})}).then(function(){e.target.textContent="reported";e.target.disabled=true})};
+function cmp(){var c=$("cmp");
+if(!VALID){c.innerHTML='<p class="note" id="note">Read-only. <a href="/app#pro">Unlock Pro by burning $WIF</a> to post. The pass also gives alerts and full holding history.</p>';return}
+c.innerHTML='<div class="cmp"><textarea id="tx" maxlength="240" placeholder="Say something (240 characters, no links)" aria-label="Message"></textarea><button class="go" id="sd" type="button">Send</button></div><p class="note" id="note"></p>';
+$("sd").onclick=send;$("tx").onkeydown=function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();send()}}}
+function send(){var t=$("tx").value.trim();if(!t)return;$("sd").disabled=true;
+fetch("/api/chat/post",{method:"POST",headers:{"x-pass":PASS},body:JSON.stringify({room:room,text:t})}).then(function(r){return r.json()}).then(function(d){
+if(d.error)$("note").innerHTML='<span class="er">'+esc(d.error)+"</span>";else{$("tx").value="";$("note").textContent=""}$("sd").disabled=false})
+.catch(function(){$("note").innerHTML='<span class="er">Could not send. Try again.</span>';$("sd").disabled=false})}
+function init(){tabs();open();
+fetch("/api/radar").then(function(r){return r.json()}).then(function(d){RD=d;RDAT=Date.now();pin()}).catch(function(){});
+setInterval(function(){fetch("/api/radar").then(function(r){return r.json()}).then(function(d){RD=d;RDAT=Date.now()}).catch(function(){})},30000);setInterval(pin,1000);
+if(PASS)fetch("/api/pass?pass="+encodeURIComponent(PASS)).then(function(r){return r.json()}).then(function(d){VALID=!!d.valid;cmp()}).catch(function(){cmp()});else cmp()}
+init();
+</script></body></html>

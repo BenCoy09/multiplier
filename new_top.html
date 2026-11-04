@@ -1,0 +1,29 @@
+
+<header><div class="hd"><span class="wm">Multiplier Explorer</span><nav><a href="#how">How it works</a><a href="#lookup">Look up a wallet</a></nav></div></header>
+<main>
+<section class="hero">
+<div>
+<p class="eb">ROBINHOOD CHAIN / STOCK TOKENS</p>
+<h1>Same tokens. <em>Different shares.</em></h1>
+<p class="sub">When a stock token’s multiplier is updated, the balance in a wallet stays the same, but the underlying shares those tokens represent change. See when it happened, by how much, and what it meant for any wallet.</p>
+<div class="cta"><a class="btn" href="#lookup">Explore multiplier history</a><a class="btn o" href="#how">See how it works</a></div>
+<p class="lab">READ-ONLY · ON-CHAIN DATA · NO WALLET CONNECTION</p>
+</div>
+<div class="diff" id="df" aria-label="Historical SPY multiplier update">
+<p class="k">BEFORE</p><p class="v">1.00<mark>0000000</mark></p>
+<p class="k">AFTER</p><p class="v a">1.00<mark>1717991</mark></p>
+<p class="cap">Historical event, not live. SPY multiplier, effective 2026-09-18 00:10 UTC. <a href="https://robinhoodchain.blockscout.com/tx/0x2fe45ab24d1b3fa87883f8b08daf29dae969c5b43d0afe9ccca299c11a641025" target="_blank" rel="noopener">View transaction</a><br>Illustration: 100 tokens represent 100.0000 shares before and 100.1718 after.</p>
+</div>
+</section>
+<section class="sec" id="how"><h2>A token balance doesn’t tell the whole story.</h2>
+<div class="steps">
+<div><b>01</b><h3>A wallet holds tokens</h3><p>The balance is a raw token amount. A multiplier update does not change it.</p></div>
+<div><b>02</b><h3>The multiplier changes</h3><p>An on-chain event records the old value, the new value and when it takes effect.</p></div>
+<div><b>03</b><h3>We work out the difference</h3><p>Tokens × multiplier, before and after, using the wallet’s balance when the update took effect.</p></div>
+</div></section>
+<div id="lookup" class="lh"><h2>Look up a wallet. See the change.</h2><p>Choose a stock token and enter a wallet address. Every update links to its transaction, and anything that can’t be verified is stated.</p></div>
+<script>
+(function(){var d=document.getElementById("df");if(!d)return;
+if(!("IntersectionObserver" in window)){d.className+=" now";return}
+new IntersectionObserver(function(e,o){if(e[0].isIntersecting){d.className+=" in";o.disconnect()}},{threshold:.5}).observe(d)})();
+</script>

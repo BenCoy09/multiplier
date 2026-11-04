@@ -1,0 +1,3 @@
+/* explorer page: centre the column instead of hugging the left */
+main:not(.w){max-width:760px;margin-left:auto;margin-right:auto}
+.row,#out,.pro{max-width:none}
