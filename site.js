@@ -4,13 +4,12 @@ var L=[["/","Home"],["/app","Explorer"],["/rooms","Rooms"],["/builders","For bui
 var h=document.getElementById("sx");
 if(h){h.className="sx";h.innerHTML='<div class="sx-in"><a class="sx-brand" href="/"><img src="/mark.svg" alt="" width="30" height="30"><span>Multiplier Explorer</span></a><nav class="sx-nav" aria-label="Main">'+L.map(function(l){return'<a href="'+l[0]+'"'+(P===l[0]?' aria-current="page"':"")+">"+l[1]+"</a>"}).join("")+'</nav><a class="sx-cta" href="/app">Open explorer</a></div>'}
 var f=document.getElementById("sxf");
-if(f){f.className="sxf";f.innerHTML='<div class="sx-in"><div><b>Multiplier Explorer</b><p>A read-only explorer for Robinhood Chain stock-token multiplier updates. Independent project, not affiliated with Robinhood. Shares represented = token balance × multiplier; this is not a statement about market value.</p></div><div class="sxf-l"><a href="/">Home</a><a href="/app">Explorer</a><a href="/rooms">Rooms</a><a href="/builders">For builders</a><a href="/judges">For judges</a><a href="/judges#live">Status</a><a href="https://github.com/BenCoy09/multiplier" target="_blank" rel="noopener">GitHub</a><a href="#" id="bgt" role="button"></a></div></div>'}
+if(f){f.className="sxf";f.innerHTML='<div class="sx-in"><div><b>Multiplier Explorer</b><p>A read-only explorer for Robinhood Chain stock-token multiplier updates. Independent project, not affiliated with Robinhood. Shares represented = token balance × multiplier; this is not a statement about market value.</p></div><div class="sxf-l"><a href="/">Home</a><a href="/app">Explorer</a><a href="/rooms">Rooms</a><a href="/builders">For builders</a><a href="/judges">For judges</a><a href="/judges#live">Status</a><a href="https://github.com/BenCoy09/multiplier" target="_blank" rel="noopener">GitHub</a></div></div>'}
 })();
 
-/* background: rings and fine sand drifting in slow water. Calm, paused when hidden, static for reduced motion, can be switched off.
+/* background: rings and fine sand drifting in slow water. Calm, paused when hidden, static for reduced motion.
    Pages can make the water ripple (for example when a room message arrives): window.mxPulse() or window.dispatchEvent(new CustomEvent("mx:pulse")). */
 (function(){
-var KEY="mx_bg",off=false;try{off=localStorage.getItem(KEY)==="off"}catch(e){}
 var reduce=!!(window.matchMedia&&matchMedia("(prefers-reduced-motion:reduce)").matches);
 var P=location.pathname.replace(/\/$/,"")||"/",dens=P==="/"?1:0.5,LIFE=1800;
 var c=document.createElement("canvas");c.setAttribute("aria-hidden","true");c.style.cssText="position:fixed;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none";document.body.appendChild(c);
@@ -20,7 +19,7 @@ function colors(){try{var s=getComputedStyle(document.documentElement);col.ac=(s
 function make(){ps=[];var n=Math.round(Math.min(90,Math.max(26,W*H/24000))*dens*(W<700?0.6:1));
 for(var i=0;i<n;i++){var g=Math.random()<0.2,z=Math.random();ps.push({x:Math.random()*W,y:Math.random()*H,z:z,g:g,r:g?5+z*7:0.8+z*1.8,a:g?0.16+z*0.18:0.12+z*0.22,rot:Math.random()*6.28,sp:0.4+z*0.9})}}
 function field(px,py,t){return(Math.sin(px*0.0021+t*0.00011)+Math.cos(py*0.0017-t*0.00009)+Math.sin((px+py)*0.0012+t*0.00005))*1.05}
-function pulse(o){if(off||reduce||document.hidden)return;o=o||{};
+function pulse(o){if(reduce||document.hidden)return;o=o||{};
 var px=typeof o.x==="number"?o.x:W*(0.3+Math.random()*0.4),py=typeof o.y==="number"?o.y:H*(0.3+Math.random()*0.4),s=Math.min(1.5,Math.max(0.5,+o.s||1));
 rp.push({x:px,y:py,t:performance.now(),s:s});if(rp.length>4)rp.shift()}
 window.mxPulse=pulse;window.addEventListener("mx:pulse",function(e){pulse(e&&e.detail)});
@@ -38,11 +37,11 @@ if(now){x.strokeStyle=col.ac;for(var k=0;k<rp.length;k++){var q=rp[k],ag=now-q.t
 x.lineWidth=0.6+2.2*(1-u);x.globalAlpha=0.38*(1-u)*(1-u);x.beginPath();x.arc(q.x,q.y,r,0,6.2832);x.stroke();
 if(u>0.18){x.lineWidth=0.6+1.4*(1-u);x.globalAlpha=0.2*(1-u)*(1-u);x.beginPath();x.arc(q.x,q.y,r*0.62,0,6.2832);x.stroke()}}}
 x.globalAlpha=1}
-function loop(now){raf=0;if(off||document.hidden)return;var dt=Math.min(50,now-t0);t0=now;
+function loop(now){raf=0;if(document.hidden)return;var dt=Math.min(50,now-t0);t0=now;
 if(dt>34){if(++slow>40&&ps.length>20){ps.length=Math.floor(ps.length/2);slow=0}}else if(slow>0)slow--;
 while(rp.length&&now-rp[0].t>LIFE)rp.shift();
 step(dt,now);draw(now);raf=requestAnimationFrame(loop)}
-function start(){if(off){x.clearRect(0,0,W,H);return}colors();if(reduce){draw(0);return}if(!raf){t0=performance.now();raf=requestAnimationFrame(loop)}}
+function start(){colors();if(reduce){draw(0);return}if(!raf){t0=performance.now();raf=requestAnimationFrame(loop)}}
 function size(){var dpr=Math.min(window.devicePixelRatio||1,1.5);W=window.innerWidth;H=window.innerHeight;c.width=Math.round(W*dpr);c.height=Math.round(H*dpr);x.setTransform(dpr,0,0,dpr,0,0);make();start()}
 /* ignore the small height changes a phone makes when its address bar slides in or out, so the sand does not reshuffle */
 var rt=0,lw=window.innerWidth,lh=window.innerHeight;
@@ -51,8 +50,5 @@ window.addEventListener("pointermove",function(e){mx=e.clientX;my=e.clientY},{pa
 document.addEventListener("pointerleave",function(){mx=my=-999});
 document.addEventListener("visibilitychange",start);
 try{matchMedia("(prefers-color-scheme:dark)").addEventListener("change",function(){colors();if(reduce)draw(0)})}catch(e){}
-var tg=document.getElementById("bgt");
-function label(){if(tg)tg.textContent="Background: "+(off?"off":"on")}
-if(tg){label();tg.onclick=function(e){e.preventDefault();off=!off;try{localStorage.setItem(KEY,off?"off":"on")}catch(x2){}label();if(off){if(raf){cancelAnimationFrame(raf);raf=0}rp.length=0;x.clearRect(0,0,W,H)}else start()}}
 size();
 })();
