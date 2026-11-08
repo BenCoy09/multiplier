@@ -228,21 +228,6 @@ const save = () => { try { fs.writeFileSync(DB, JSON.stringify(db)); } catch (_)
 const wifDec = async () => parseInt(await call(WIF, SEL.decimals), 16);
 const toUnits = (s, d) => { const [a, b = ""] = String(s).split("."); return BigInt(a + (b + "0".repeat(d)).slice(0, d)); };
 const okPass = (p) => !!(p && db.passes[p] && db.passes[p].exp > Date.now());
-async function redeem(tx, sid) {
-  if (!/^0x[0-9a-fA-F]{64}$/.test(tx)) throw new Error("That is not a transaction hash.");
-  if (db.burns.some((b) => b.tx.toLowerCase() === tx.toLowerCase())) throw new Error("This transaction has already been used.");
-  const r = await rpc("eth_getTransactionReceipt", [tx]);
-  if (!r) throw new Error("Transaction not found yet. Wait a moment and try again.");
-  if (r.status !== "0x1") throw new Error("That transaction failed on-chain.");
-  const dec = await wifDec(), need = toUnits(PRICE, dec), dead = "0x" + pad32(DEAD);
-  let paid = 0n, from = null;
-  for (const l of r.logs) if (l.address.toLowerCase() === WIF.toLowerCase() && l.topics.length === 3 && l.topics[0] === T_TR && l.topics[2].toLowerCase() === dead) { paid += BigInt(l.data); from = "0x" + l.topics[1].slice(26); }
-  if (paid < need) throw new Error("No transfer of at least " + PRICE + " $WIF to the dead address was found in that transaction.");
-  if (sid) { const s = sessions.get(sid); if (!s) throw new Error("Your wallet session expired. Connect again."); if (s.a !== from.toLowerCase()) throw new Error("That burn came from a different wallet than the one you signed in with."); }
-  const pass = crypto.randomBytes(16).toString("hex"), exp = Date.now() + DAYS * 864e5;
-  db.passes[pass] = { exp, from, tx }; db.burns.push({ tx, from, amount: paid.toString(), t: Date.now() }); save();
-  return { pass, exp, from, amount: paid.toString(), decimals: dec };
-}
 async function stats() {
   let dec = null; try { dec = await wifDec(); } catch (_) {}
   let tot = 0n; for (const b of db.burns) tot += BigInt(b.amount);
@@ -252,7 +237,7 @@ async function stats() {
 // ---- live radar + Telegram alerts ----
 const BOT = process.env.TELEGRAM_BOT_TOKEN || "", BOT_NAME = process.env.BOT_USERNAME || "", TG = process.env.TG_API || "https://api.telegram.org";
 const APP_URL = (process.env.APP_URL || "").replace(/\/$/, ""), TICK = Number(process.env.TICK_MS || 60000), ONE18 = 10n ** 18n;
-db.sent = db.sent || {};
+db.sent = db.sent || {}; db.chats = db.chats || {};
 const radar = { ev: {}, seen: {}, full: {}, now: 0, nowAt: 0, err: null };
 const SEED = { // verified on-chain events (from the evidence report); the watcher adds anything new
   SPY: [{ o: "1000000000000000000", n: "1001717991187472003", eff: 1789690233, tx: "0x2fe45ab24d1b3fa87883f8b08daf29dae969c5b43d0afe9ccca299c11a641025", block: 65779981 }],
@@ -281,24 +266,112 @@ async function sendExample(p, chat) {
   }
   return say(chat, "This wallet holds none of the five stock tokens right now, so there is nothing to alert on yet.");
 }
+// ---- Telegram bot: commands + a persistent chat link. db.chats maps chat id -> pass key and is saved with the rest of db ----
+const DEFAULT_TG = "Open the website, unlock Pro, and use the Telegram link there to turn alerts on. Send /help to see the commands.";
+const utc = (sec) => new Date(sec * 1000).toISOString().slice(0, 16).replace("T", " ") + " UTC";
+const dayOf = (ms) => new Date(ms).toISOString().slice(0, 10);
+const daysLeft = (ms) => Math.max(0, Math.ceil((ms - Date.now()) / 864e5));
+function linkedPass(chat) { // [key, pass] for the pass this chat is linked to, expired or not
+  const c = String(chat), k = db.chats[c];
+  if (k && db.passes[k] && String(db.passes[k].chat) === c) return [k, db.passes[k]];
+  let best = null; for (const [k2, p] of Object.entries(db.passes)) if (p.chat !== undefined && String(p.chat) === c && (!best || p.exp > db.passes[best].exp)) best = k2;
+  if (best) { db.chats[c] = best; return [best, db.passes[best]]; }
+  return null;
+}
+function linkChat(key, chat) {
+  const p = db.passes[key], c = String(chat), old = db.chats[c];
+  if (old && old !== key && db.passes[old] && String(db.passes[old].chat) === c) delete db.passes[old].chat;
+  if (p.chat !== undefined && String(p.chat) !== c) delete db.chats[String(p.chat)];
+  p.chat = chat; delete p.tgOff; db.chats[c] = key; save();
+}
+function backfillChats() { for (const [k, p] of Object.entries(db.passes)) if (p.chat !== undefined) db.chats[String(p.chat)] = db.chats[String(p.chat)] || k; }
+const statusText = (p) => { const W = walletsOf(p); return "Pro pass: active until " + dayOf(p.exp) + " (" + daysLeft(p.exp) + " days left)\nAlerts: " + (p.tgOff ? "off. Send /start to turn them on" : "on") + "\nWatched wallets (" + W.length + " of " + (MAXW + 1) + "): " + W.map(short).join(", ") + (APP_URL ? "\nRenew or add a wallet: " + APP_URL + "/app#pro" : ""); };
+const expiredText = (p) => "Your Pro pass expired on " + dayOf(p.exp) + ", so alerts are paused. Your wallets (" + walletsOf(p).map(short).join(", ") + ") and this Telegram link are saved.\nTo renew: open " + (APP_URL ? APP_URL + "/app#pro" : "the website") + " and press Renew (one click, or burn " + PRICE + " $WIF and paste the hash). You sign one free message with the paying wallet. Alerts resume as soon as the renewal is confirmed.";
+const helpText = () => "Multiplier Explorer alerts for stock-token multiplier updates on the wallets your Pro pass watches.\n/status - Pro expiry, watched wallets, alerts on or off\n/wallets - watched wallets\n/radar - scheduled multiplier updates\n/holdings - real shares in your watched wallets\n/lookup <wallet> <token> - quick lookup (" + Object.keys(TOK).join(", ") + ")\n/stop - pause alerts, /start - resume\n\nUnlock or renew: open " + (APP_URL ? APP_URL + "/app#pro" : "the website") + ", burn " + PRICE + " $WIF (one click, or paste the hash) and sign one free message with the paying wallet. A copied transaction hash is useless to anyone else. Then use Turn on Telegram alerts on that page.";
+function radarText() {
+  const now = radar.now ? radar.now + Math.round((Date.now() - radar.nowAt) / 1000) : Math.floor(Date.now() / 1000), up = [], past = [];
+  for (const s of Object.keys(TOK)) { const L = radar.ev[s]; for (const e of L) if (e.eff > now) up.push([s, e]); const l = L.filter((e) => e.eff <= now).pop(); if (l) past.push([s, l]); }
+  up.sort((a, b) => a[1].eff - b[1].eff);
+  const line = ([s, e]) => s + " " + fxs(BigInt(e.o), 18, 9) + " → " + fxs(BigInt(e.n), 18, 9) + ", effective " + utc(e.eff);
+  let t = up.length ? "Scheduled multiplier updates:\n" + up.slice(0, 10).map(line).join("\n") : "No multiplier updates are scheduled right now.";
+  if (past.length) t += "\n\nLatest applied:\n" + past.map(line).join("\n");
+  if (Object.keys(TOK).some((s) => !radar.full[s])) t += "\n\n(The full history is still loading, so this list may be incomplete.)";
+  return t + (APP_URL ? "\n\n" + APP_URL + "/app" : "");
+}
+async function holdingsText(p) {
+  const out = [];
+  for (const w of walletsOf(p)) {
+    const d = await portfolio(w), rows = d.tokens.filter((t) => BigInt(t.balance) > 0n).map((t) => t.sym + ": " + fxs(BigInt(t.balance), t.decimals) + " tokens ≈ " + (t.shares === null ? "unknown" : fxs(BigInt(t.shares), t.decimals)) + " real shares");
+    out.push(short(w) + "\n" + (rows.length ? rows.join("\n") : "holds none of the five stock tokens"));
+  }
+  return out.join("\n\n") + "\n\nReal shares = tokens × the multiplier the contract reports now." + (APP_URL ? "\n" + APP_URL + "/app" : "");
+}
+const lookupAt = {}; let lookupBusy = 0;
+async function lookupText(sym, w) {
+  const d = await lookup(sym, w, false), dec = d.decimals, bal = BigInt(d.balanceNow), ev = d.events;
+  const mu = d.mult ? BigInt(d.mult) : ev.length ? BigInt(ev[ev.length - 1].n) : ONE18;
+  let t = sym + " · " + short(w) + "\nHolds " + fxs(bal, dec) + " tokens ≈ " + fxs((bal * mu) / ONE18, dec) + " real shares (multiplier " + fxs(mu, 18, 9) + ").";
+  if (ev.length) {
+    const e = ev[ev.length - 1], a = d.atUpdate;
+    t += "\nLast update " + dayOf(e.eff * 1000) + ": " + fxs(BigInt(e.o), 18, 9) + " → " + fxs(BigInt(e.n), 18, 9) + ".";
+    if (a && a.raw !== null) { const raw = BigInt(a.raw), df = (raw * (BigInt(e.n) - BigInt(e.o))) / ONE18; t += " At the balance held then (" + fxs(raw, dec) + " tokens) that changed the shares represented by " + (df < 0n ? "" : "+") + fxs(df, dec) + "."; }
+    else t += " The balance at that time could not be rebuilt, so no change is shown.";
+  } else t += "\nNo multiplier updates found for this token.";
+  if (d.scheduled.length) { const n = d.scheduled[0], im = (bal * (BigInt(n.n) - BigInt(n.o))) / ONE18; t += "\nNext scheduled: " + utc(n.eff) + ", about " + (im < 0n ? "" : "+") + fxs(im, dec) + " shares at today's balance."; }
+  return t + "\n" + (APP_URL ? APP_URL + "/app?t=" + sym + "&w=" + w : "Open the website explorer for the full history.");
+}
 async function onMsg(m) {
   if (!m || !m.text) return;
-  const t = m.text.trim(), chat = m.chat.id, mm = /^\/start\s+([0-9a-f]{32})$/i.exec(t);
-  if (mm) {
-    const p = db.passes[mm[1]];
-    if (!p || p.exp < Date.now()) return say(chat, "That pass is invalid or has expired.");
-    p.chat = chat; save();
-    await say(chat, "Alerts are on for wallet " + short(p.from) + " until " + new Date(p.exp).toISOString().slice(0, 10) + ". You will be told when a multiplier update is scheduled and when it takes effect, only for stock tokens this wallet holds. Send /stop to turn them off.");
-    return sendExample2(p, chat);
+  const t = m.text.trim(), chat = m.chat.id, parts = t.split(/\s+/), cmd = parts[0].toLowerCase().replace(/@\w+$/, "");
+  const link = linkedPass(chat), p = link && link[1], active = !!(p && p.exp > Date.now());
+  if (cmd === "/start" && parts.length > 1) {
+    if (!/^[0-9a-f]{32}$/i.test(parts[1])) return say(chat, "That link is not valid. Use the Telegram button on the website again.");
+    const np = db.passes[parts[1].toLowerCase()] || db.passes[parts[1]];
+    if (!np) return say(chat, "That pass was not found. If this server was reset, open the website and unlock again.");
+    const key = db.passes[parts[1].toLowerCase()] ? parts[1].toLowerCase() : parts[1];
+    linkChat(key, chat);
+    if (np.exp < Date.now()) return say(chat, expiredText(np));
+    await say(chat, "Alerts are on for " + walletsOf(np).length + " watched wallet(s), starting with " + short(np.from) + ", until " + dayOf(np.exp) + ". You will be told when a multiplier update is scheduled and when it takes effect, only for stock tokens those wallets hold. Send /help for the commands, /stop to pause.");
+    return sendExample2(np, chat);
   }
-  if (t === "/stop") { for (const k in db.passes) if (db.passes[k].chat === chat) delete db.passes[k].chat; save(); return say(chat, "Alerts stopped."); }
-  return say(chat, "Open the website, unlock Pro, and use the Telegram link there to turn alerts on. Send /stop to turn them off.");
+  if (cmd === "/start") {
+    if (!p) return say(chat, DEFAULT_TG);
+    if (!active) return say(chat, expiredText(p));
+    if (p.tgOff) { delete p.tgOff; save(); }
+    return say(chat, "Welcome back. This chat is linked to an active Pro pass.\n" + statusText(p));
+  }
+  if (cmd === "/help") return say(chat, helpText());
+  if (cmd === "/stop") { if (!p) return say(chat, "No alerts are on for this chat."); p.tgOff = true; save(); return say(chat, "Alerts stopped. Your Pro pass and wallets are kept. Send /start to turn alerts back on."); }
+  if (cmd === "/radar" || cmd === "/upcoming") return say(chat, radarText());
+  if (cmd === "/lookup") {
+    const a = parts.slice(1), w = a.find((x) => ADDRE.test(x)), sym = (a.find((x) => TOK[x.toUpperCase()]) || "").toUpperCase();
+    if (!w || !sym) return say(chat, "Usage: /lookup <wallet> <token>\nTokens: " + Object.keys(TOK).join(", "));
+    if (Date.now() - (lookupAt[chat] || 0) < 15000) return say(chat, "One lookup every 15 seconds, please.");
+    if (lookupBusy >= 3) return say(chat, "Busy right now. Try again in a minute.");
+    lookupAt[chat] = Date.now(); lookupBusy++;
+    try { await say(chat, "Looking up " + sym + "… long histories can take a minute."); await say(chat, await lookupText(sym, w)); }
+    catch (e) { await say(chat, "The data could not be retrieved or verified: " + e.message + ". This is an error, not an empty wallet."); }
+    finally { lookupBusy--; }
+    return;
+  }
+  if (["/status", "/wallets", "/holdings", "/portfolio"].includes(cmd)) {
+    if (!p) return say(chat, DEFAULT_TG);
+    if (cmd === "/status") return say(chat, active ? statusText(p) : expiredText(p));
+    if (!active) return say(chat, expiredText(p));
+    if (cmd === "/wallets") return say(chat, "Watched wallets:\n" + walletsOf(p).map((w, i) => (i + 1) + ". " + w).join("\n") + (APP_URL ? "\nAdd a wallet: " + APP_URL + "/app#pro" : ""));
+    try { await say(chat, "Reading balances…"); return say(chat, await holdingsText(p)); }
+    catch (e) { return say(chat, "Could not read balances: " + e.message); }
+  }
+  return say(chat, p ? "I did not recognise that. Send /help for the commands." : DEFAULT_TG);
 }
 async function pollTg() {
   let off = 0;
   for (;;) {
-    try { const j = await tg("getUpdates", { offset: off, timeout: 25, allowed_updates: ["message"] }); for (const u of j.result || []) { off = u.update_id + 1; await onMsg(u.message); } }
-    catch (e) { await sleep(5000); }
+    try {
+      const j = await tg("getUpdates", { offset: off, timeout: 25, allowed_updates: ["message"] });
+      if (!j.ok) { await sleep(5000); continue; }
+      for (const u of j.result || []) { off = u.update_id + 1; onMsg(u.message).catch(() => {}); } // not awaited: a slow /lookup must not stall the bot
+    } catch (e) { await sleep(5000); }
   }
 }
 async function notifyDue(now) {
@@ -332,7 +405,7 @@ async function bootScan() {
     for (const s of Object.keys(TOK)) { const H = await history(s, latest, Date.now() + 90000); for (const e of H.events) addEvent(s, e); radar.full[s] = !H.partial; }
   } catch (e) { radar.err = e.message; }
 }
-function startBackground() { tick(); setInterval(tick, TICK); bootScan(); if (BOT) pollTg(); else console.log("Telegram alerts off (set TELEGRAM_BOT_TOKEN and BOT_USERNAME to enable)."); }
+function startBackground() { backfillChats(); tick(); setInterval(tick, TICK); bootScan(); if (BOT) { tg("setMyCommands", { commands: [["start", "Link or resume alerts"], ["status", "Pro expiry, wallets, alerts"], ["wallets", "Watched wallets"], ["radar", "Scheduled multiplier updates"], ["holdings", "Real shares in your wallets"], ["lookup", "Look up a wallet and token"], ["help", "Commands and how to renew"], ["stop", "Pause alerts"]].map(([command, description]) => ({ command, description })) }).catch(() => {}); pollTg(); } else console.log("Telegram alerts off (set TELEGRAM_BOT_TOKEN and BOT_USERNAME to enable)."); }
 
 // ---- rooms: live chat. Anyone reads; posting needs a Pro pass (a $WIF burn) ----
 const EE = new (require("events"))(); EE.setMaxListeners(0);
@@ -382,7 +455,7 @@ async function loadStore() {
   if (!UP) return;
   try {
     const v = await up(["GET", "mx_db"]);
-    if (v) { Object.assign(db, JSON.parse(v)); db.sent = db.sent || {}; db.chat = db.chat || { id: 0, msgs: {} }; }
+    if (v) { Object.assign(db, JSON.parse(v)); db.sent = db.sent || {}; db.chats = db.chats || {}; db.chat = db.chat || { id: 0, msgs: {} }; }
     storeOk = true; console.log("Store: loaded " + Object.keys(db.passes).length + " passes");
   } catch (e) { console.log("Store load failed (saving to it is disabled):", e.message); }
 }
@@ -390,36 +463,97 @@ function storeSave() { // only writes after a successful load, so an outage can 
   if (!UP || !storeOk || saveT) return;
   saveT = setTimeout(async () => { saveT = null; try { await up(["SET", "mx_db", JSON.stringify(db)]); } catch (e) { console.log("Store save failed:", e.message); } }, 1500);
 }
+for (const sg of ["SIGTERM", "SIGINT"]) process.on(sg, async () => {
+  try { fs.writeFileSync(DB, JSON.stringify(db)); } catch (_) {}
+  try { if (UP && storeOk) await Promise.race([up(["SET", "mx_db", JSON.stringify(db)]), sleep(4000)]); } catch (_) {}
+  process.exit(0);
+});
 const walletsOf = (p) => [p.from, ...(p.wallets || [])];
+const TXRE = /^0x[0-9a-fA-F]{64}$/, ADDRE = /^0x[0-9a-fA-F]{40}$/;
+const burnUsed = (tx) => db.burns.some((b) => b.tx.toLowerCase() === tx.toLowerCase());
+function recordBurn(tx, v) { // synchronous check + write, so two racing claims can never both pass
+  if (burnUsed(tx)) throw new Error("This transaction has already been used.");
+  db.burns.push({ tx, from: v.from, amount: v.paid.toString(), t: Date.now() });
+}
 async function verifyBurn(tx, price) {
-  if (!/^0x[0-9a-fA-F]{64}$/.test(tx)) throw new Error("That is not a transaction hash.");
-  if (db.burns.some((b) => b.tx.toLowerCase() === tx.toLowerCase())) throw new Error("This transaction has already been used.");
+  if (!TXRE.test(tx)) throw new Error("That is not a transaction hash.");
+  if (burnUsed(tx)) throw new Error("This transaction has already been used.");
   const r = await rpc("eth_getTransactionReceipt", [tx]);
   if (!r) throw new Error("Transaction not found yet. Wait a moment and try again.");
   if (r.status !== "0x1") throw new Error("That transaction failed on-chain.");
-  const dec = await wifDec(), need = toUnits(price, dec), dead = "0x" + pad32(DEAD);
+  const dec = await wifDec(), need = toUnits(price, dec), dead = "0x" + pad32(DEAD), senders = new Set();
   let paid = 0n, from = null;
-  for (const l of r.logs) if (l.address.toLowerCase() === WIF.toLowerCase() && l.topics.length === 3 && l.topics[0] === T_TR && l.topics[2].toLowerCase() === dead) { paid += BigInt(l.data); from = "0x" + l.topics[1].slice(26); }
+  for (const l of r.logs) if (l.address.toLowerCase() === WIF.toLowerCase() && l.topics.length === 3 && l.topics[0] === T_TR && l.topics[2].toLowerCase() === dead) { paid += BigInt(l.data); from = "0x" + l.topics[1].slice(26); senders.add(from.toLowerCase()); }
   if (paid < need) throw new Error("No transfer of at least " + price + " $WIF to the dead address was found in that transaction.");
-  return { from, paid };
+  if (senders.size !== 1) throw new Error("That transaction burned $WIF from more than one wallet, so it cannot be claimed. Burn from a single wallet.");
+  return { from, paid, dec };
 }
-async function renew(pass, tx) {
+
+// ---- signed claims: a burn hash alone is worthless; the wallet that sent the burn must sign a message that contains the hash ----
+const CLAIM_RE = /^Multiplier Explorer burn claim\n[^\n]*\nAction: (redeem|renew|addwallet)\nTx: (0x[0-9a-f]{64})\nFor: ([^\n]+)\nTime: (\d+)\nCode: ([0-9a-f]{32})$/;
+const claimMac = (action, tx, forStr, ts) => crypto.createHmac("sha256", SECRET).update(["claim", action, tx, forStr, ts].join("|")).digest("hex").slice(0, 32);
+function claimFor(action, pass, wallet) { // what the signature is bound to besides the tx
+  if (action === "redeem") return "-";
+  if (action === "renew") { if (!db.passes[pass]) throw new Error("Pro pass not found."); return who(pass); }
+  if (action === "addwallet") { addWalletChecks(pass, wallet); return wallet.toLowerCase(); }
+  throw new Error("Unknown action.");
+}
+function claimMessage(action, tx, forStr) {
+  if (!TXRE.test(tx)) throw new Error("That is not a transaction hash.");
+  tx = tx.toLowerCase(); forStr = String(forStr).toLowerCase();
+  const ts = Date.now();
+  return "Multiplier Explorer burn claim\nThis proves you sent this $WIF burn. It sends no transaction and costs nothing.\nAction: " + action + "\nTx: " + tx + "\nFor: " + forStr + "\nTime: " + ts + "\nCode: " + claimMac(action, tx, forStr, ts);
+}
+function checkClaim(message, sig, action, tx, forStr) { // returns the lowercase address that signed
+  const m = CLAIM_RE.exec(String(message || ""));
+  if (!m) throw new Error("The claim message was not recognised. Start the claim again.");
+  const ok = m[1] === action && m[2] === tx.toLowerCase() && m[3] === String(forStr).toLowerCase() && m[5] === claimMac(m[1], m[2], m[3], m[4]);
+  if (!ok) throw new Error("The claim message does not match this transaction. Start the claim again.");
+  const age = Date.now() - Number(m[4]); if (age > 20 * 60000 || age < -60000) throw new Error("The claim message expired. Start the claim again.");
+  let signer; try { signer = eth.recover(message, sig).toLowerCase(); } catch (_) { throw new Error("That signature is not valid."); }
+  return signer;
+}
+async function claimBurn(action, tx, message, sig, price, forStr) {
+  tx = String(tx || "").trim();
+  if (!TXRE.test(tx)) throw new Error("That is not a transaction hash.");
+  if (burnUsed(tx)) throw new Error("This transaction has already been used.");
+  const signer = checkClaim(message, sig, action, tx, forStr);   // cheap checks first
+  const v = await verifyBurn(tx, price);
+  if (v.from.toLowerCase() !== signer) throw new Error("That signature is not from the wallet that sent this burn. Sign with " + short(v.from) + ".");
+  return v;
+}
+const bestPassOf = (addr) => { let best = null; for (const [k, p] of Object.entries(db.passes)) if (p.from && p.from.toLowerCase() === addr.toLowerCase() && (!best || p.exp > db.passes[best].exp)) best = k; return best; };
+async function redeem(tx, message, sig) {
+  const v = await claimBurn("redeem", tx, message, sig, PRICE, "-");
+  recordBurn(tx, v);
+  let key = bestPassOf(v.from), renewed = !!key;
+  if (key) { const p = db.passes[key]; p.exp = Math.max(p.exp, Date.now()) + DAYS * 864e5; delete p.reminded; delete p.expNotified; } // same wallet paying again extends its pass
+  else { key = crypto.randomBytes(16).toString("hex"); db.passes[key] = { exp: Date.now() + DAYS * 864e5, from: v.from, tx }; }
+  save();
+  return { pass: key, exp: db.passes[key].exp, from: v.from, amount: v.paid.toString(), decimals: v.dec, renewed };
+}
+async function renew(pass, tx, message, sig) {
   const p = db.passes[pass]; if (!p) throw new Error("Pro pass not found.");
-  const v = await verifyBurn(tx, PRICE);
-  p.exp = Math.max(p.exp, Date.now()) + DAYS * 864e5; delete p.reminded;
-  db.burns.push({ tx, from: v.from, amount: v.paid.toString(), t: Date.now() }); save();
+  const v = await claimBurn("renew", tx, message, sig, PRICE, who(pass));
+  recordBurn(tx, v);
+  p.exp = Math.max(p.exp, Date.now()) + DAYS * 864e5; delete p.reminded; delete p.expNotified; save();
   return { exp: p.exp };
 }
-async function addWallet(pass, tx, wallet) {
+function addWalletChecks(pass, wallet) {
   if (!okPass(pass)) throw new Error("Pro pass missing or expired.");
-  if (!/^0x[0-9a-fA-F]{40}$/.test(wallet)) throw new Error("Enter a 42-character wallet address starting with 0x.");
-  const p = db.passes[pass], w = wallet.toLowerCase();
-  if (walletsOf(p).some((x) => x.toLowerCase() === w)) throw new Error("That wallet is already watched.");
+  if (!ADDRE.test(wallet)) throw new Error("Enter a 42-character wallet address starting with 0x.");
+  const p = db.passes[pass];
+  if (walletsOf(p).some((x) => x.toLowerCase() === wallet.toLowerCase())) throw new Error("That wallet is already watched.");
   if ((p.wallets || []).length >= MAXW) throw new Error("A pass can watch up to " + (MAXW + 1) + " wallets.");
-  const v = await verifyBurn(tx, PRICE_WALLET);
-  (p.wallets = p.wallets || []).push(wallet); db.burns.push({ tx, from: v.from, amount: v.paid.toString(), t: Date.now() }); save();
+}
+async function addWallet(pass, tx, wallet, message, sig) {
+  addWalletChecks(pass, wallet);
+  const p = db.passes[pass], v = await claimBurn("addwallet", tx, message, sig, PRICE_WALLET, wallet.toLowerCase());
+  addWalletChecks(pass, wallet); recordBurn(tx, v);
+  (p.wallets = p.wallets || []).push(wallet); save();
   return { wallets: walletsOf(p) };
 }
+const readJson = (req) => new Promise((ok, no) => { let b = ""; req.on("data", (d) => { b += d; if (b.length > 6000) { no(new Error("Request too large.")); req.destroy(); } }); req.on("end", () => { try { ok(JSON.parse(b || "{}")); } catch (_) { no(new Error("Bad request.")); } }); req.on("error", no); });
 async function sendExample2(p, chat) {
   for (const w of walletsOf(p)) for (const s of Object.keys(TOK)) {
     const L = radar.ev[s].filter((e) => e.eff <= (radar.now || Infinity)); if (!L.length) continue;
@@ -430,10 +564,11 @@ async function sendExample2(p, chat) {
 }
 async function notifyDue2(now) {
   for (const [pk, p] of Object.entries(db.passes)) {
-    if (!p.chat || p.exp < Date.now()) continue;
+    if (!p.chat || p.tgOff) continue;
+    if (p.exp < Date.now()) { if (!p.expNotified) { p.expNotified = true; save(); if (Date.now() - p.exp < 3 * 864e5) await say(p.chat, expiredText(p)); } continue; }
     if (p.exp - Date.now() < 3 * 864e5 && !p.reminded) {
       p.reminded = true; save();
-      await say(p.chat, "Your Pro pass ends on " + new Date(p.exp).toISOString().slice(0, 10) + ". To keep your alerts, renew at " + (APP_URL || "the website") + "/app#pro: burn " + PRICE + " $WIF, then paste the hash under Manage your pass.");
+      await say(p.chat, "Your Pro pass ends on " + new Date(p.exp).toISOString().slice(0, 10) + ". To keep your alerts, renew at " + (APP_URL || "the website") + "/app#pro and press Renew (one click, or burn " + PRICE + " $WIF and paste the hash; you sign one free message with the paying wallet).");
     }
     for (const w of walletsOf(p)) for (const s of Object.keys(TOK)) for (const e of radar.ev[s]) {
       const kind = e.eff > now ? "pre" : now - e.eff < 900 ? "live" : null; if (!kind) continue;
@@ -471,7 +606,7 @@ function setName(pass, raw) {
 }
 
 // ---- wallet sign-in: proves ownership of an address, restores a pass, binds a burn claim to its sender ----
-const eth = require("./eth.js"), SECRET = crypto.randomBytes(32), sessions = new Map();
+const eth = require("./eth.js"), SECRET = process.env.SESSION_SECRET ? crypto.createHash("sha256").update(process.env.SESSION_SECRET).digest() : crypto.randomBytes(32), sessions = new Map();
 const mac = (ts) => crypto.createHmac("sha256", SECRET).update(String(ts)).digest("hex").slice(0, 24);
 const loginMessage = () => { const ts = Date.now(); return "Multiplier Explorer sign-in\nThis only proves you own this wallet. It sends no transaction and costs nothing.\nTime: " + ts + "\nCode: " + mac(ts); };
 function login(addr, message, sig) {
@@ -483,7 +618,8 @@ function login(addr, message, sig) {
   for (const [k, v] of sessions) if (Date.now() - v.t > 864e5) sessions.delete(k);
   const sid = crypto.randomBytes(16).toString("hex"); sessions.set(sid, { a: who, t: Date.now() });
   let best = null; for (const [k, p] of Object.entries(db.passes)) if (p.from && p.from.toLowerCase() === who && p.exp > Date.now() && (!best || p.exp > db.passes[best].exp)) best = k;
-  return { sid, address: who, pass: best || undefined, name: best ? db.passes[best].name || "" : "" };
+  let old = null; if (!best) for (const [k, p] of Object.entries(db.passes)) if (p.from && p.from.toLowerCase() === who && (!old || p.exp > db.passes[old].exp)) old = k;
+  return { sid, address: who, pass: best || undefined, expiredPass: old || undefined, name: best ? db.passes[best].name || "" : "" };
 }
 
 // ---- portfolio: one wallet across all five tokens (reads the radar's known updates, so it is cheap) ----
@@ -535,27 +671,38 @@ else http.createServer(async (req, res) => {
     return;
   }
   
-if (["/api/pass-info", "/api/redeem", "/api/pass", "/api/stats", "/api/radar", "/api/health", "/api/renew", "/api/addwallet", "/api/nonce", "/api/portfolio"].includes(u.pathname)) {
+if (["/api/pass-info", "/api/redeem", "/api/pass", "/api/stats", "/api/radar", "/api/health", "/api/renew", "/api/addwallet", "/api/nonce", "/api/portfolio", "/api/claim-msg"].includes(u.pathname)) {
     const send = (c, o) => { res.writeHead(c, { "content-type": "application/json", "access-control-allow-origin": "*" }); res.end(JSON.stringify(o)); };
     try {
-      if (u.pathname === "/api/pass-info") return send(200, { token: WIF, dead: DEAD, price: PRICE, decimals: await wifDec(), days: DAYS, bot: BOT_NAME });
+      if (u.pathname === "/api/pass-info") return send(200, { token: WIF, dead: DEAD, price: PRICE, decimals: await wifDec(), days: DAYS, bot: BOT_NAME, priceWallet: PRICE_WALLET, maxWallets: MAXW + 1 });
       if (u.pathname === "/api/portfolio") { const w = u.searchParams.get("wallet") || ""; if (!/^0x[0-9a-fA-F]{40}$/.test(w)) throw new Error("Invalid wallet address"); return send(200, await portfolio(w)); }
       if (u.pathname === "/api/nonce") return send(200, { message: loginMessage() });
       if (u.pathname === "/api/health") return send(200, { ok: true, telegram: await tgCheck(), burns: db.burns.length, store: UP ? (storeOk ? "external" : "external (not loaded)") : "file", chainTime: radar.now || null });
-      if (u.pathname === "/api/renew" || u.pathname === "/api/addwallet") {
-        const pass = req.headers["x-pass"], tx = u.searchParams.get("tx") || "";
-        if (busy.has(tx)) throw new Error("That transaction is already being checked.");
-        busy.add(tx);
-        try { return send(200, u.pathname === "/api/renew" ? await renew(pass, tx) : await addWallet(pass, tx, u.searchParams.get("wallet") || "")); } finally { busy.delete(tx); }
+      if (u.pathname === "/api/claim-msg") {
+        const action = u.searchParams.get("action") || "", tx = u.searchParams.get("tx") || "";
+        return send(200, { message: claimMessage(action, tx, claimFor(action, req.headers["x-pass"] || "", u.searchParams.get("wallet") || "")) });
       }
-      
+      if (u.pathname === "/api/redeem" || u.pathname === "/api/renew" || u.pathname === "/api/addwallet") {
+        if (req.method !== "POST") throw new Error("Claiming a burn needs a free signature from the paying wallet. Reload the page and use the Unlock, Renew or Add wallet button.");
+        const j = await readJson(req), pass = req.headers["x-pass"] || "", tx = String(j.tx || "").trim(), key = tx.toLowerCase(), msg = String(j.message || ""), sig = String(j.signature || "");
+        if (busy.has(key)) throw new Error("That transaction is already being checked.");
+        busy.add(key);
+        try {
+          if (u.pathname === "/api/redeem") return send(200, await redeem(tx, msg, sig));
+          if (u.pathname === "/api/renew") return send(200, await renew(pass, tx, msg, sig));
+          return send(200, await addWallet(pass, tx, String(j.wallet || ""), msg, sig));
+        } finally { busy.delete(key); }
+      }
+
 if (u.pathname === "/api/radar") return send(200, radarJson());
       if (u.pathname === "/api/stats") return send(200, await stats());
-      if (u.pathname === "/api/pass") { const p = db.passes[u.searchParams.get("pass")]; return send(200, p && p.exp > Date.now() ? { valid: true, exp: p.exp, wallets: walletsOf(p), tg: !!p.chat, price: PRICE, priceWallet: PRICE_WALLET, name: p.name || "", me: who(u.searchParams.get("pass")) } : { valid: false }); }
-      const tx = u.searchParams.get("tx") || "";
-      if (busy.has(tx)) throw new Error("That transaction is already being checked.");
-      busy.add(tx);
-      try { return send(200, await redeem(tx, req.headers["x-sid"])); } finally { busy.delete(tx); }
+      if (u.pathname === "/api/pass") {
+        const k = u.searchParams.get("pass") || "", p = db.passes[k];
+        if (!p) return send(200, { valid: false });
+        const info = { exp: p.exp, wallets: walletsOf(p), tg: !!p.chat && !p.tgOff, tgLinked: !!p.chat, price: PRICE, priceWallet: PRICE_WALLET, maxWallets: MAXW + 1, name: p.name || "", me: who(k) };
+        return send(200, p.exp > Date.now() ? { valid: true, ...info } : { valid: false, expired: true, ...info });
+      }
+      return send(404, { error: "Unknown endpoint." });
     } catch (e) { return send(400, { error: e.message }); }
   }
   if (u.pathname === "/api/lookup") {

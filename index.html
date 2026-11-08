@@ -88,7 +88,8 @@ async function run(){const w=$("addr").value.trim(),o=$("out");last=null;
 if(!/^0x[0-9a-fA-F]{40}$/.test(w)){o.innerHTML='<div class="msg er">Enter a 42-character wallet address starting with 0x.</div>';return}
 $("go").disabled=true;o.innerHTML='<div class="msg">Reading Robinhood Chain data. Long histories can take a minute.</div>';
 history.replaceState(null,"","?t="+cur+"&w="+w);if(cur==="ALL"){runAll(w);return}
-try{const r=await fetch("/api/lookup?token="+cur+"&wallet="+w+(PASS?"&full=1":""),{headers:PASS?{"x-pass":PASS}:{}}),d=await r.json();if(r.status===401){setPass("");proInit()}if(!r.ok)throw new Error(d.error||"Request failed");render(d,w)}
+try{const get=pro=>fetch("/api/lookup?token="+cur+"&wallet="+w+(pro?"&full=1":""),{headers:pro?{"x-pass":PASS}:{}});let pro=!!(PASS&&PRO),r=await get(pro);
+if(r.status===401&&pro){PRO=false;proInit();r=await get(false)}const d=await r.json();if(!r.ok)throw new Error(d.error||"Request failed");render(d,w)}
 catch(e){o.innerHTML=`<div class="msg er"><b>The data could not be retrieved or verified.</b><br>${esc(e.message)}<br>This is an error, not an empty history. Press Analyze to retry.</div>`}
 $("go").disabled=false}
 function render(d,w){const o=$("out"),dec=d.decimals;let h="";
@@ -107,18 +108,50 @@ h+=`<div class="card"><p><b>Your ${cur} tokens stayed the same. The shares they 
 else h+=`<div class="msg er"><b>Historical balance unavailable.</b> ${esc(a?a.reason:"")} No figure is shown rather than a guess. Balance today: ${fx(BigInt(d.balanceNow),dec)} tokens.</div>`;
 h+=`<h2>Every multiplier change, newest first</h2><ol>${tl(d.events,0)}</ol>`;if(d.perEvent)h+=holdTable(d,w)}
 o.innerHTML=h;const c=$("cp");if(c){c.onclick=async()=>{try{if(navigator.share)await navigator.share({url:location.href});else{await navigator.clipboard.writeText(location.href);c.textContent="Link copied"}}catch(e){}};$("cd").onclick=card}}
-var PASS="";try{PASS=localStorage.getItem("mx_pass")||""}catch(e){}
+var PASS="",PRO=false,FLASH="";try{PASS=localStorage.getItem("mx_pass")||""}catch(e){}PRO=!!PASS;
+const dm=ms=>new Date(ms).toISOString().slice(0,10);
 function setPass(p){PASS=p;try{if(p)localStorage.setItem("mx_pass",p);else localStorage.removeItem("mx_pass")}catch(e){}}
-async function proInit(){var b=$("pro");
-if(PASS){try{var r=await(await fetch("/api/pass?pass="+encodeURIComponent(PASS))).json();if(r.valid){b.innerHTML='<div class="msg"><b>Pro active</b> until '+new Date(r.exp).toISOString().slice(0,10)+'. Analyze now also shows the wallet’s balance at every update, with a CSV download.</div>';tgLink(b);proTools(b,r);return}}catch(e){}setPass("")}
-b.innerHTML='<details id="pd"><summary>Unlock Pro with $WIF</summary><div id="pb" class="m">Loading…</div></details>';
-$("pd").addEventListener("toggle",function(){if($("pd").open)proInfo()});if(location.hash==="#pro")$("pd").open=true}
-async function proInfo(){var x=$("pb");try{var i=await(await fetch("/api/pass-info")).json();if(i.error)throw new Error(i.error);
-x.innerHTML='<p>Pro shows the wallet’s balance at <b>every</b> multiplier update, exports a CSV and turns on Telegram alerts for the paying wallet. It lasts '+i.days+' days and is unlocked by burning $WIF.</p><p>1. In your own wallet, send <b>'+esc(i.price)+' $WIF</b> to the dead address, which takes it out of circulation:<code>'+i.dead+'</code>Token contract:<code>'+i.token+'</code></p><p>2. Paste the transaction hash here:</p><div class="row"><input id="rtx" placeholder="0x… transaction hash" spellcheck="false" aria-label="Burn transaction hash"><button class="go" id="rgo" type="button">Unlock</button></div><p id="rm" class="m"></p><p class="m">This site never connects to your wallet. It checks the burn on-chain. Whoever submits a burn hash first receives the pass, so redeem right after sending.</p>';
-$("rgo").onclick=redeemTx;oneClick(x,i)}catch(e){x.textContent="Could not load unlock details: "+e.message}}
-async function redeemTx(){var m=$("rm"),t=$("rtx").value.trim();$("rgo").disabled=true;m.textContent="Checking the transaction on-chain…";
-try{var r=await fetch("/api/redeem?tx="+encodeURIComponent(t)),d=await r.json();if(!r.ok)throw new Error(d.error||"Failed");setPass(d.pass);proInit()}
-catch(e){m.textContent=e.message}$("rgo").disabled=false}
+function flashBox(){var f=FLASH;FLASH="";return f?'<div class="msg" style="border-style:solid;color:var(--ink)">'+esc(f)+"</div>":""}
+async function getInfo(){var i=await(await fetch("/api/pass-info")).json();if(i.error)throw new Error(i.error);return i}
+async function proInit(){var b=$("pro"),st=null,down=false;
+if(PASS){try{st=await(await fetch("/api/pass?pass="+encodeURIComponent(PASS))).json()}catch(e){down=true}}
+if(down){b.innerHTML=flashBox()+'<div class="msg er">Could not reach the server to check your Pro pass. Your pass is still saved on this device. <button class="lk" id="rty" type="button">Try again</button></div>';$("rty").onclick=proInit;return}
+if(st&&st.valid){PRO=true;return proActive(b,st)}
+if(st&&st.expired){PRO=false;return proExpired(b,st)}
+if(PASS)setPass("");PRO=false;proLocked(b)}
+function proLocked(b){b.innerHTML=flashBox()+'<details id="pd"><summary>Unlock Pro with $WIF</summary><div id="pbox" class="m">Loading…</div></details><button class="lk" id="rst" type="button">Already paid on another device? Restore your pass with your wallet (free signature)</button>';
+$("rst").onclick=walletRestore;$("pd").addEventListener("toggle",function(){if($("pd").open&&!$("pbox").dataset.ok)proInfo()});if(location.hash==="#pro")$("pd").open=true}
+async function proInfo(){var x=$("pbox");try{var i=await getInfo();x.dataset.ok="1";
+x.innerHTML='<p>Pro shows the wallet’s balance at <b>every</b> multiplier update, exports a CSV and turns on Telegram alerts for the paying wallet. It lasts '+i.days+' days and is unlocked by burning $WIF.</p><div id="ps"></div><p class="m">This site never holds your funds and never asks for approvals. It checks the burn on-chain and asks the paying wallet for one free signature, so a copied transaction hash is useless to anyone else.</p>';
+MXW.payPanel($("ps"),{action:"redeem",price:i.price,info:i,pass:function(){return""},onDone:function(d){setPass(d.pass);FLASH=d.renewed?"This wallet already had a pass, so it now runs until "+dm(d.exp)+".":"Pro is unlocked until "+dm(d.exp)+".";proInit()}})}
+catch(e){x.textContent="Could not load unlock details: "+e.message}}
+function tgLink(b,i,r){if(!i.bot)return;b.insertAdjacentHTML("beforeend",'<p><a class="go" style="display:inline-block;text-decoration:none;border-radius:8px" href="https://t.me/'+esc(i.bot)+'?start='+encodeURIComponent(PASS)+'" target="_blank" rel="noopener">'+(r.tgLinked?"Open Telegram bot":"Turn on Telegram alerts")+'</a></p><p class="m">'+(r.tgLinked?"This pass is linked to a Telegram chat ("+(r.tg?"alerts on":"alerts paused: send /start to the bot")+"). Send /status to the bot any time.":"Alerts cover the wallets on this pass, only for stock tokens they hold.")+"</p>")}
+async function proActive(b,r){var i=null;try{i=await getInfo()}catch(e){}
+var left=Math.max(0,Math.ceil((r.exp-Date.now())/864e5)),mx=r.maxWallets||5,full=r.wallets.length>=mx;
+b.innerHTML=flashBox()+'<div class="msg"><b>Pro active</b> until '+dm(r.exp)+" ("+left+" day"+(left===1?"":"s")+" left). Analyze now also shows the wallet’s balance at every update, with a CSV download.</div>";
+if(i)tgLink(b,i,r);
+b.insertAdjacentHTML("beforeend",'<p class="m">Alerts cover '+r.wallets.length+" wallet"+(r.wallets.length>1?"s":"")+":"+r.wallets.map(function(w){return"<code>"+esc(w)+"</code>"}).join("")+'</p><div class="acts"><button id="bren" type="button" aria-expanded="false">Renew</button><button id="badd" type="button" aria-expanded="false"'+(full?' disabled title="A pass can watch up to '+mx+' wallets"':"")+'>Add wallet</button></div><div id="pp"></div>');
+if(!i){$("pp").innerHTML='<div class="msg er">Could not load payment details. Reload the page to try again.</div>';return}
+var open=null;
+function show(k){var pp=$("pp");$("bren").setAttribute("aria-expanded","false");$("badd").setAttribute("aria-expanded","false");
+if(open===k){open=null;pp.innerHTML="";return}
+open=k;$(k==="r"?"bren":"badd").setAttribute("aria-expanded","true");
+if(k==="r"){pp.innerHTML='<p><b>Renew for another '+i.days+' days.</b> This extends the same pass from its current end date, for <b>'+esc(r.price)+' $WIF</b>.</p><div id="ps"></div>';
+MXW.payPanel($("ps"),{action:"renew",price:r.price,info:i,pass:function(){return PASS},onDone:function(d){FLASH="Renewed. Your pass now runs until "+dm(d.exp)+".";proInit()}})}
+else{pp.innerHTML='<p><b>Watch another wallet</b> ('+r.wallets.length+" of "+mx+' used). Burn <b>'+esc(r.priceWallet)+' $WIF</b> from any wallet you own. The wallet you watch can be a different one.</p><div class="row"><input id="aw" placeholder="Wallet to watch (0x…)" spellcheck="false" autocomplete="off" aria-label="Wallet to watch"></div><div id="ps" style="margin-top:10px"></div>';
+MXW.payPanel($("ps"),{action:"addwallet",price:r.priceWallet,info:i,pass:function(){return PASS},
+getWallet:function(){var v=$("aw").value.trim();if(!/^0x[0-9a-fA-F]{40}$/.test(v))throw new Error("Enter the wallet to watch first (0x…, 42 characters).");if(r.wallets.some(function(w){return w.toLowerCase()===v.toLowerCase()}))throw new Error("That wallet is already watched.");return v},
+setWallet:function(v){$("aw").value=v},
+onDone:function(d){FLASH="Wallet added. Alerts now cover "+d.wallets.length+" wallet"+(d.wallets.length>1?"s":"")+".";proInit()}})}}
+$("bren").onclick=function(){show("r")};$("badd").onclick=function(){show("a")};
+if(location.hash==="#pro"){show("r");b.scrollIntoView()}}
+async function proExpired(b,r){var i=null;try{i=await getInfo()}catch(e){}
+b.innerHTML=flashBox()+'<div class="msg er"><b>Your Pro pass expired</b> on '+dm(r.exp)+". Your watched wallets and Telegram link are kept. Renew to turn Pro and alerts back on.</div>";
+if(!i){b.insertAdjacentHTML("beforeend",'<div class="msg er">Could not load payment details. Reload the page to try again.</div>');return}
+tgLink(b,i,r);
+b.insertAdjacentHTML("beforeend",'<p><b>Renew for another '+i.days+' days</b> for <b>'+esc(r.price)+' $WIF</b>.</p><div id="ps"></div>');
+MXW.payPanel($("ps"),{action:"renew",price:r.price,info:i,pass:function(){return PASS},onDone:function(d){FLASH="Renewed. Your pass now runs until "+dm(d.exp)+".";proInit()}});
+if(location.hash==="#pro")b.scrollIntoView()}
 function holdTable(d,w){var dec=d.decimals,E=10n**18n,rows=[],csv=["date_utc,old_multiplier,new_multiplier,token_balance,shares_before,shares_after,change"];
 var pl=function(b){return fx(b,dec,Math.min(dec,8)).replace(/,/g,"").replace(/−/g,"-")};
 d.events.forEach(function(e,i){var p=d.perEvent[i],day=dt(e.eff);
@@ -129,14 +162,6 @@ csv.push(day+","+fm(e.o)+","+fm(e.n)+","+pl(raw)+","+pl(b)+","+pl(a)+","+pl(df))
 window.__csv=csv.join("\n");
 return'<h2>Your holding at each update</h2><div class="tw"><table class="ht"><tr><th>Date</th><th>Multiplier</th><th>Tokens held</th><th>Shares before</th><th>Shares after</th><th>Change</th></tr>'+rows.join("")+'</table></div><div class="acts"><button id="pdl" type="button" onclick="dlcsv()">Download CSV</button></div>'}
 function dlcsv(){var a=document.createElement("a");a.href=URL.createObjectURL(new Blob([window.__csv],{type:"text/csv"}));a.download="multiplier-history.csv";a.click()}
-async function tgLink(b){try{var i=await(await fetch("/api/pass-info")).json();if(i.bot)b.insertAdjacentHTML("beforeend",'<p><a class="go" style="display:inline-block;text-decoration:none;border-radius:8px" href="https://t.me/'+esc(i.bot)+'?start='+encodeURIComponent(PASS)+'" target="_blank" rel="noopener">Turn on Telegram alerts</a></p><p class="m">Alerts cover the wallet that paid the burn, only for stock tokens it holds.</p>')}catch(e){}}
-async function proTools(b,r){try{var i=await(await fetch("/api/pass-info")).json();
-b.insertAdjacentHTML("beforeend",'<details class="m" id="mg"><summary>Manage your pass</summary><p>Alerts cover '+r.wallets.length+" wallet"+(r.wallets.length>1?"s":"")+":"+r.wallets.map(function(w){return"<code>"+esc(w)+"</code>"}).join("")+"</p>"+
-'<p><b>Watch another wallet</b> (up to 5 in total). Send <b>'+esc(r.priceWallet)+" $WIF</b> to <code>"+i.dead+'</code> then paste the wallet to watch and the transaction hash:</p><div class="row"><input id="aw" placeholder="Wallet to watch (0x…)" spellcheck="false" aria-label="Wallet to watch"></div><div class="row" style="margin-top:6px"><input id="at" placeholder="0x… burn transaction hash" spellcheck="false" aria-label="Burn transaction hash"><button class="go" id="ab" type="button">Add</button></div>'+
-"<p><b>Renew for another "+i.days+" days.</b> Send <b>"+esc(r.price)+' $WIF</b> to the same address and paste the hash:</p><div class="row"><input id="rt" placeholder="0x… burn transaction hash" spellcheck="false" aria-label="Renewal transaction hash"><button class="go" id="rb" type="button">Renew</button></div><p id="mm" class="m"></p></details>');
-$("ab").onclick=function(){act("/api/addwallet?tx="+encodeURIComponent($("at").value.trim())+"&wallet="+encodeURIComponent($("aw").value.trim()))};
-$("rb").onclick=function(){act("/api/renew?tx="+encodeURIComponent($("rt").value.trim()))}}catch(e){}}
-async function act(u){var m=$("mm");m.textContent="Checking the transaction on-chain…";try{var x=await fetch(u,{headers:{"x-pass":PASS}}),d=await x.json();if(!x.ok)throw new Error(d.error||"Failed");proInit()}catch(e){m.textContent=e.message}}
 async function runAll(w){var o=$("out");
 try{var r=await fetch("/api/portfolio?wallet="+w),d=await r.json();if(!r.ok)throw new Error(d.error||"Request failed");
 var E=10n**18n,rows=d.tokens.map(function(t){var bal=BigInt(t.balance),dec=t.decimals,m=t.mult?fm(t.mult):(t.last?fm(t.last.n):"unknown"),nx="none";
