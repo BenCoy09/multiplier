@@ -6,7 +6,7 @@ Independent project, not affiliated with Robinhood. Shares represented = token b
 
 - Live app: https://multiplier-cg4g.onrender.com
 - For judges (test steps, live status, verified burns): https://multiplier-cg4g.onrender.com/judges
-- Demo video: VIDEO_URL_HERE
+- Demo video: https://youtu.be/cOZMXdXPXRg?is=qRpDi5TKlH_DLt_u
 - Built for the World Is Flat hackathon. Categories: stock tokens, tools and infra
 
 ## What it does
