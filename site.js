@@ -1,6 +1,6 @@
 (function(){
 var P=location.pathname.replace(/\/$/,"")||"/";
-var L=[["/","Home"],["/app","Explorer"],["/rooms","Rooms"],["/builders","For builders"],["/judges","For judges"]];
+var L=[["/","Home"],["/app","Explorer"],["/rooms","Rooms"],["/builders","For builders"],["/judges","For judges"],["/votes","Vote"]];
 var h=document.getElementById("sx");
 if(h){h.className="sx";h.innerHTML='<div class="sx-in"><a class="sx-brand" href="/"><img src="/mark.svg" alt="" width="30" height="30"><span>Multiplier Explorer</span></a><nav class="sx-nav" aria-label="Main">'+L.map(function(l){return'<a href="'+l[0]+'"'+(P===l[0]?' aria-current="page"':"")+">"+l[1]+"</a>"}).join("")+'</nav><a class="sx-cta" href="/app">Open explorer</a></div>'}
 var f=document.getElementById("sxf");
