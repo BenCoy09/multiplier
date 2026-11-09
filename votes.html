@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Community vote · Multiplier Explorer</title><link rel="icon" href="/mark.svg" type="image/svg+xml">
+<style>
+:root{--bg:#f4f5f1;--pn:#fff;--ink:#0f141b;--mu:#58626e;--ln:#d8dcd4;--ac:#0b6e5f;--ng:#b3412e;--hi:#d3f0e6;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0b141d;--pn:#112030;--ink:#e8eff5;--mu:#8ea1b2;--ln:#22333f;--ac:#4fd1b8;--ng:#f08a77;--hi:#12392f}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+.w{max-width:780px;margin:0 auto;padding:0 18px}h1{font:400 clamp(32px,6vw,46px)/1.05 Georgia,serif;letter-spacing:-.02em;margin:28px 0 8px}h2{font:700 17px system-ui;margin:30px 0 8px}
+.mu{color:var(--mu)}a{color:var(--ac)}code{font:13px ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+.rn{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:18px 0 6px}.rn a,.rn span.dis{padding:8px 14px;border:1px solid var(--ln);border-radius:999px;text-decoration:none;font-size:14px;color:var(--ink);background:var(--pn)}.rn span.dis{opacity:.4}
+.k{font:600 20px Georgia,serif}.badge{display:inline-block;margin-left:8px;padding:2px 10px;border-radius:999px;font:600 12px system-ui;background:var(--hi);color:var(--ac);vertical-align:middle}.badge.fin{background:var(--ln);color:var(--mu)}
+.win{margin:12px 0;padding:12px 16px;border-radius:12px;background:var(--hi);border:1px solid var(--ac)}
+.warn{margin:12px 0;padding:12px 16px;border-radius:12px;border:1px solid var(--ng)}
+.opt{background:var(--pn);border:1px solid var(--ln);border-radius:12px;margin:10px 0;overflow:hidden}.opt>summary{list-style:none;cursor:pointer;padding:14px 16px;display:grid;grid-template-columns:34px 70px 1fr auto;gap:10px;align-items:center}.opt>summary::-webkit-details-marker{display:none}
+.n{font:700 14px ui-monospace,Menlo,monospace;color:var(--mu)}.sym{font-weight:700}.bar{height:10px;border-radius:99px;background:var(--ln);overflow:hidden}.bar i{display:block;height:100%;background:var(--ac)}.cnt{font:600 15px ui-monospace,Menlo,monospace;text-align:right;white-space:nowrap}
+.lst{border-top:1px solid var(--ln);padding:6px 16px 12px;font:13px ui-monospace,Menlo,monospace;overflow-x:auto}.lst div{padding:5px 0;border-top:1px dashed var(--ln);white-space:nowrap}.lst div:first-child{border-top:0}
+.tot{margin-top:6px;color:var(--mu);font-size:14px}.disc{margin:26px 0 4px;padding:14px 16px;border:1px dashed var(--ln);border-radius:12px}
+ul{padding-left:20px}li{margin:6px 0}footer{margin:34px 0 40px}
+</style><link rel="stylesheet" href="/site.css"></head><body>
+<header id="sx"></header>
+<main class="w">
+<h1>Community vote.</h1>
+<p class="mu">Read-only for now. Every number on this page is read from $WIF burns on Robinhood Chain and recomputed from the chain, so you can check any vote yourself. Nothing is stored on this server.</p>
+<div class="rn" id="rn"></div>
+<div id="out" aria-live="polite"><p class="mu">Reading the chain…</p></div>
+<h2>How votes are counted</h2>
+<ul>
+<li>A vote is one burn of whole $WIF to <code>0x000000000000000000000000000000000000dEaD</code> with the option number added in the smallest unit. For example, 1.000000000000000002 $WIF is option 2.</li>
+<li>One burn is one vote. Burning more $WIF in one transaction does not add weight.</li>
+<li>A round is one ISO week: Monday 00:00:00 UTC to Sunday 23:59:59 UTC. There is no admin and no schedule job. Each round is recomputed from the chain.</li>
+<li>Pro passes burn exact whole amounts, so they are never counted as votes. Any other burn to that address shows up under "Other burns".</li>
+</ul>
+<p class="disc">$WIF is a memecoin with no promise of value or return. Votes are burned and cannot be undone.</p>
+</main>
+<footer id="sxf"></footer>
+<script>
+var $=function(i){return document.getElementById(i)};
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+var fmt=function(s){return new Date(s*1000).toISOString().slice(0,16).replace("T"," ")+" UTC"};
+var short=function(a){return a.slice(0,6)+"…"+a.slice(-4)};
+var q=new URLSearchParams(location.search).get("round")||"";
+function nav(r){var n=$("rn");n.textContent="";
+ var p=el("a",null,"← "+r.prev);p.href="?round="+r.prev;
+ var mid=el("div");var k=el("span","k",r.key);mid.appendChild(k);var b=el("span","badge"+(r.current?"":" fin"),r.future?"not started":r.current?"live":"final");mid.appendChild(b);
+ mid.appendChild(el("div","mu",fmt(r.start)+" to "+fmt(r.end)));
+ var nx;if(r.current){nx=el("span","dis",r.next+" →")}else{nx=el("a",null,r.next+" →");nx.href="?round="+r.next}
+ n.appendChild(p);n.appendChild(mid);n.appendChild(nx)}
+function render(d){var o=$("out");o.textContent="";nav(d.round);
+ if(d.partial){o.appendChild(el("div","warn","The scan did not finish in time, so these counts may be incomplete. Reload to try again."))}
+ if(d.tie){o.appendChild(el("div","win","Tied at the top: "+d.tie.join(", ")+"."))}
+ else if(d.leader){o.appendChild(el("div","win",(d.final?"Winner: ":"Leading: ")+d.leader+(d.final?"":" (the round is still open)")))}
+ else if(!d.round.future){o.appendChild(el("p","mu","No votes in this round yet."))}
+ var max=Math.max.apply(null,d.options.map(function(x){return x.votes}).concat([1]));
+ d.options.forEach(function(x){var det=el("details","opt");var s=el("summary");s.appendChild(el("span","n",String(x.n)));s.appendChild(el("span","sym",x.sym));
+  var bar=el("div","bar");var i=el("i");i.style.width=(100*x.votes/max)+"%";bar.appendChild(i);s.appendChild(bar);
+  s.appendChild(el("span","cnt",x.votes+" vote"+(x.votes===1?"":"s")));det.appendChild(s);
+  var l=el("div","lst");
+  if(!x.list.length)l.appendChild(el("div","mu","No votes for "+x.sym+" yet."));
+  x.list.forEach(function(v){var r=el("div");r.appendChild(document.createTextNode(short(v.from)+" · block "+v.block+" · "+v.amountWif+" $WIF · "));var a=el("a",null,v.tx.slice(0,12)+"…");a.href=d.explorer+"/tx/"+v.tx;a.target="_blank";a.rel="noopener";r.appendChild(a);l.appendChild(r)});
+  if(x.truncated)l.appendChild(el("div","mu","Showing the newest "+x.list.length+" of "+x.votes+"."));
+  det.appendChild(l);o.appendChild(det)});
+ o.appendChild(el("p","tot","Total votes: "+d.total+". Other burns to the dead address (not votes, including Pro passes): "+d.other.count+", "+d.other.burnedWif+" $WIF."));
+ o.appendChild(el("p","tot","Blocks "+(d.round.startBlock==null?"-":d.round.startBlock)+" to "+(d.round.endBlock==null?"-":d.round.endBlock)+"."))}
+fetch("/api/votes"+(q?"?round="+encodeURIComponent(q):"")).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||"Failed");return j})}).then(render).catch(function(e){$("out").textContent="";$("out").appendChild(el("div","warn","Could not read the vote tally: "+e.message+". This is an error, not an empty round."))});
+</script><script src="/site.js"></script></body></html>
