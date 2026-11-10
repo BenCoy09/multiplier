@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Multiplier audit · Multiplier Explorer</title><link rel="icon" href="/mark.svg" type="image/svg+xml">
+<style>
+:root{--bg:#f4f5f1;--pn:#fff;--ink:#0f141b;--mu:#58626e;--ln:#d8dcd4;--ac:#0b6e5f;--ng:#b3412e;--hi:#d3f0e6;color-scheme:light dark}
+@media (prefers-color-scheme:dark){:root{--bg:#0b141d;--pn:#112030;--ink:#e8eff5;--mu:#8ea1b2;--ln:#22333f;--ac:#4fd1b8;--ng:#f08a77;--hi:#12392f}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}
+.w{max-width:780px;margin:0 auto;padding:0 18px}h1{font:400 clamp(32px,6vw,46px)/1.05 Georgia,serif;letter-spacing:-.02em;margin:28px 0 8px}h2{font:700 17px system-ui;margin:28px 0 8px}
+.mu{color:var(--mu)}a{color:var(--ac)}code{font:13px ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+.tk{display:flex;gap:8px;flex-wrap:wrap;margin:16px 0}.tk a{padding:8px 16px;border:1px solid var(--ln);border-radius:999px;text-decoration:none;font-weight:600;font-size:15px;color:var(--ink);background:var(--pn)}.tk a[aria-current=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.pick{margin:12px 0;padding:12px 16px;border-radius:12px;background:var(--hi);border:1px solid var(--ac)}.warn{margin:12px 0;padding:12px 16px;border-radius:12px;border:1px solid var(--ng)}
+.ev{background:var(--pn);border:1px solid var(--ln);border-radius:12px;padding:14px 16px;margin:10px 0}.ev b{font-size:17px}.ev .m{font:14px ui-monospace,Menlo,monospace;color:var(--mu);overflow-wrap:anywhere;margin-top:4px}
+.sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin:14px 0}.sum div{background:var(--pn);border:1px solid var(--ln);border-radius:12px;padding:12px 14px}.sum small{display:block;color:var(--mu);font-size:12px;letter-spacing:.06em;text-transform:uppercase}.sum span{font:600 20px Georgia,serif}
+.disc{margin:26px 0 4px;padding:14px 16px;border:1px dashed var(--ln);border-radius:12px}footer{margin:34px 0 40px}
+a:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
+</style><link rel="stylesheet" href="/site.css"></head><body>
+<header id="sx"></header>
+<main class="w">
+<h1 id="h">Multiplier audit.</h1>
+<p class="mu">Every multiplier update on record for a stock token, each linked to its transaction on Robinhood Chain. Read from chain events, so you can check any line yourself.</p>
+<div id="pk"></div>
+<div class="tk" id="tk" role="group" aria-label="Stock token"></div>
+<div id="out" aria-live="polite"><p class="mu">Reading the chain…</p></div>
+<h2>How to read this</h2>
+<ul>
+<li>A stock token's balance can stay the same while the real shares it stands for change, because a multiplier changes. Real shares = token balance × multiplier ÷ 1e18.</li>
+<li>Updates come from the on-chain <code>UIMultiplierUpdated</code> event. The effective time is later than the block that emitted it, so the time shown is the effective time.</li>
+<li>If the history scan did not finish, this page says so. A token with no update on record has not been re-based in the history we read.</li>
+</ul>
+<p class="disc">This is a read-only report of on-chain events. No money, no promise of return, and not financial advice.</p>
+</main>
+<footer id="sxf"></footer>
+<script>
+var $=function(i){return document.getElementById(i)},TOKS=["SPY","NVDA","GLD","CRCL","SPCX"],TXB="https://robinhoodchain.blockscout.com/tx/",E18=10n**18n;
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
+function fm(s){var b=BigInt(s);return (b/E18).toString()+"."+(b%E18).toString().padStart(18,"0").slice(0,9)}
+function dt(e){return new Date(e*1000).toISOString().slice(0,16).replace("T"," ")+" UTC"}
+function pct(o,n){var a=BigInt(o),b=BigInt(n),x=Number((b-a)*1000000n/a)/10000;return (x>=0?"+":"")+x.toFixed(3)+"%"}
+var want=(new URLSearchParams(location.search).get("token")||"").toUpperCase();if(TOKS.indexOf(want)<0)want="";
+function get(u){return fetch(u).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||"Failed");return j})})}
+function best(o){return o&&o.options?o.options.slice().sort(function(a,b){return b.votes-a.votes})[0]:null}
+async function findPick(){try{var cur=await get("/api/votes"),prev=await get("/api/votes?round="+encodeURIComponent(cur.round.prev));
+  if(prev.final&&prev.leader){var o=prev.options.filter(function(x){return x.sym===prev.leader})[0];return{sym:prev.leader,round:prev.round.key,votes:o.votes,final:true}}
+  if(cur.leader){var c=cur.options.filter(function(x){return x.sym===cur.leader})[0];return{sym:cur.leader,round:cur.round.key,votes:c.votes,final:false}}}catch(e){}return null}
+function chips(sel,pick){var t=$("tk");t.textContent="";TOKS.forEach(function(s){var a=el("a",null,s+(pick&&pick.sym===s?" · community pick":""));a.href="?token="+s;if(s===sel)a.setAttribute("aria-current","true");t.appendChild(a)})}
+function show(rad,sym,pick){var o=$("out");o.textContent="";$("h").textContent="Multiplier audit: "+sym;
+ var t=rad.tokens.filter(function(x){return x.sym===sym})[0];
+ if(!t){o.appendChild(el("div","warn","No data for "+sym+" was found."));return}
+ var ev=(t.events||[]).slice().sort(function(a,b){return a.eff-b.eff});
+ if(!t.complete)o.appendChild(el("div","warn","The history scan for "+sym+" has not finished, so the list below may be missing older updates. Reload in a minute."));
+ var s=el("div","sum");function box(l,v){var d=el("div");d.appendChild(el("small",null,l));d.appendChild(el("span",null,v));s.appendChild(d)}
+ box("Updates on record",String(ev.length));box("First update",ev.length?dt(ev[0].eff).slice(0,10):"none");box("Latest multiplier",ev.length?fm(ev[ev.length-1].n):"no update on record");o.appendChild(s);
+ if(!ev.length)o.appendChild(el("p","mu",t.complete?sym+" has no multiplier update on record in the history we read. It has not been re-based, so its multiplier is still 1.0 and token balances match shares.":"No updates were found so far for "+sym+"."));
+ ev.slice().reverse().forEach(function(e){var d=el("div","ev"),b=el("b",null,dt(e.eff));d.appendChild(b);d.appendChild(el("div",null,fm(e.o)+" → "+fm(e.n)+"  ("+pct(e.o,e.n)+" in shares per token)"));
+  var m=el("div","m");m.appendChild(document.createTextNode("Block "+e.block+" · "));var a=el("a",null,e.tx.slice(0,14)+"…");a.href=TXB+e.tx;a.target="_blank";a.rel="noopener";m.appendChild(a);d.appendChild(m);o.appendChild(d)})}
+(async function(){
+ var pick=await findPick(),rad;
+ try{rad=await get("/api/radar")}catch(e){$("out").textContent="";$("out").appendChild(el("div","warn","Could not read the radar: "+e.message+". This is an error, not an empty history."));chips(want,pick);return}
+ if(rad.error)$("out").appendChild(el("div","warn","The chain reader reported an error: "+rad.error));
+ if(pick){var p=$("pk"),d=el("div","pick");d.appendChild(document.createTextNode((pick.final?"Community pick, round ":"Leading the vote this week, round ")+pick.round+": "+pick.sym+" with "+pick.votes+" vote"+(pick.votes===1?"":"s")+". "));var a=el("a",null,"See the vote");a.href="/votes";d.appendChild(a);p.appendChild(d)}
+ var sym=want||(pick&&pick.sym)||"";chips(sym,pick);
+ if(!sym){$("out").textContent="";$("out").appendChild(el("p","mu","Choose a token above to see every multiplier update on record for it."));return}
+ show(rad,sym,pick)})();
+</script><script src="/site.js"></script></body></html>

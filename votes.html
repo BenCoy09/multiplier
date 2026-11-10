@@ -15,24 +15,40 @@
 .n{font:700 14px ui-monospace,Menlo,monospace;color:var(--mu)}.sym{font-weight:700}.bar{height:10px;border-radius:99px;background:var(--ln);overflow:hidden}.bar i{display:block;height:100%;background:var(--ac)}.cnt{font:600 15px ui-monospace,Menlo,monospace;text-align:right;white-space:nowrap}
 .lst{border-top:1px solid var(--ln);padding:6px 16px 12px;font:13px ui-monospace,Menlo,monospace;overflow-x:auto}.lst div{padding:5px 0;border-top:1px dashed var(--ln);white-space:nowrap}.lst div:first-child{border-top:0}
 .tot{margin-top:6px;color:var(--mu);font-size:14px}.disc{margin:26px 0 4px;padding:14px 16px;border:1px dashed var(--ln);border-radius:12px}
+.vp{margin:22px 0 10px;padding:18px 18px 16px;background:var(--pn);border:1px solid var(--ln);border-radius:14px}.vp h2{margin:0 0 4px}
+.vc{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.vc button{font:600 15px system-ui;padding:9px 16px;border-radius:999px;border:1px solid var(--ln);background:transparent;color:var(--ink);cursor:pointer}.vc button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.go{font:600 16px system-ui;padding:12px 20px;border:0;border-radius:10px;background:var(--ink);color:var(--bg);cursor:pointer}.go:disabled{opacity:.45;cursor:not-allowed}
+.vp label{display:block;margin:10px 0;font-size:15px}.vst{min-height:1.4em;margin:10px 0 0;font-size:14px;color:var(--mu);overflow-wrap:anywhere}.vst.ok{color:var(--ac);font-weight:600}.vst.er{color:var(--ng)}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--ac);outline-offset:2px}
 ul{padding-left:20px}li{margin:6px 0}footer{margin:34px 0 40px}
 </style><link rel="stylesheet" href="/site.css"></head><body>
 <header id="sx"></header>
 <main class="w">
 <h1>Community vote.</h1>
-<p class="mu">Read-only for now. Every number on this page is read from $WIF burns on Robinhood Chain and recomputed from the chain, so you can check any vote yourself. Nothing is stored on this server.</p>
+<p class="mu">Every number on this page is read from $WIF burns on Robinhood Chain and recomputed from the chain, so you can check any vote yourself. Nothing is stored on this server.</p>
+<section class="vp" id="vp" hidden>
+<h2>Cast your vote</h2>
+<p class="mu" style="margin:0">Pick a stock token. Your vote burns exactly 1 $WIF to the dead address and counts toward this week's tally.</p>
+<div class="vc" id="vc" role="group" aria-label="Stock token"></div>
+<p id="vsum" class="mu" style="margin:6px 0"></p>
+<label><input type="checkbox" id="vok"> I understand this burn is permanent and cannot be undone.</label>
+<button class="go" id="vgo" type="button" disabled>Connect wallet and vote</button>
+<p class="vst" id="vst" aria-live="polite"></p>
+</section>
+<p class="disc" id="disc">$WIF is a memecoin with no promise of value or return. Votes are burned and cannot be undone.</p>
 <div class="rn" id="rn"></div>
 <div id="out" aria-live="polite"><p class="mu">Reading the chain…</p></div>
 <h2>How votes are counted</h2>
 <ul>
-<li>A vote is one burn of whole $WIF to <code>0x000000000000000000000000000000000000dEaD</code> with the option number added in the smallest unit. For example, 1.000000000000000002 $WIF is option 2.</li>
+<li>A vote is one burn of whole $WIF to <code>0x000000000000000000000000000000000000dEaD</code> with the option number added in the smallest unit. <span id="ex">For example, 1.000000000000000002 $WIF is option 2.</span></li>
+<li id="man">To vote without the button, send exactly one of the amounts listed here.</li>
 <li>One burn is one vote. Burning more $WIF in one transaction does not add weight.</li>
 <li>A round is one ISO week: Monday 00:00:00 UTC to Sunday 23:59:59 UTC. There is no admin and no schedule job. Each round is recomputed from the chain.</li>
 <li>Pro passes burn exact whole amounts, so they are never counted as votes. Any other burn to that address shows up under "Other burns".</li>
 </ul>
-<p class="disc">$WIF is a memecoin with no promise of value or return. Votes are burned and cannot be undone.</p>
 </main>
 <footer id="sxf"></footer>
+<script src="/wallet.js"></script>
 <script>
 var $=function(i){return document.getElementById(i)};
 function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e}
@@ -48,7 +64,7 @@ function nav(r){var n=$("rn");n.textContent="";
 function render(d){var o=$("out");o.textContent="";nav(d.round);
  if(d.partial){o.appendChild(el("div","warn","The scan did not finish in time, so these counts may be incomplete. Reload to try again."))}
  if(d.tie){o.appendChild(el("div","win","Tied at the top: "+d.tie.join(", ")+"."))}
- else if(d.leader){o.appendChild(el("div","win",(d.final?"Winner: ":"Leading: ")+d.leader+(d.final?"":" (the round is still open)")))}
+ else if(d.leader){var wn=el("div","win",(d.final?"Winner: ":"Leading: ")+d.leader+(d.final?"":" (the round is still open)")+". ");var wa=el("a",null,"Read the "+d.leader+" audit");wa.href="/audit?token="+encodeURIComponent(d.leader);wn.appendChild(wa);o.appendChild(wn)}
  else if(!d.round.future){o.appendChild(el("p","mu","No votes in this round yet."))}
  var max=Math.max.apply(null,d.options.map(function(x){return x.votes}).concat([1]));
  d.options.forEach(function(x){var det=el("details","opt");var s=el("summary");s.appendChild(el("span","n",String(x.n)));s.appendChild(el("span","sym",x.sym));
@@ -61,5 +77,31 @@ function render(d){var o=$("out");o.textContent="";nav(d.round);
   det.appendChild(l);o.appendChild(det)});
  o.appendChild(el("p","tot","Total votes: "+d.total+". Other burns to the dead address (not votes, including Pro passes): "+d.other.count+", "+d.other.burnedWif+" $WIF."));
  o.appendChild(el("p","tot","Blocks "+(d.round.startBlock==null?"-":d.round.startBlock)+" to "+(d.round.endBlock==null?"-":d.round.endBlock)+"."))}
-fetch("/api/votes"+(q?"?round="+encodeURIComponent(q):"")).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||"Failed");return j})}).then(render).catch(function(e){$("out").textContent="";$("out").appendChild(el("div","warn","Could not read the vote tally: "+e.message+". This is an error, not an empty round."))});
+var sel=0,DATA=null,info=null,busy=false;
+function ready(){return !!(sel&&$("vok").checked&&!busy)}
+function amountOf(){return DATA.options[sel-1].voteAmountWif}
+function sum(){var m=$("vsum");if(!sel){m.textContent="Choose a token to see the exact amount.";return}var o=DATA.options[sel-1];m.textContent="You will burn exactly "+o.voteAmountWif+" $WIF. It counts as one vote for "+o.sym+" in round "+DATA.round.key+"."}
+function panel(d){var p=$("vp");DATA=d;
+ if(!d.round.current){p.hidden=true;return}
+ p.hidden=false;
+ if(p.dataset.built!=="1"){p.dataset.built="1";var c=$("vc");
+  d.options.forEach(function(o){var b=el("button",null,o.sym);b.type="button";b.setAttribute("aria-pressed","false");b.onclick=function(){sel=o.n;Array.prototype.forEach.call(c.children,function(x){x.setAttribute("aria-pressed",x===b?"true":"false")});sum();$("vgo").disabled=!ready()};c.appendChild(b)});
+  $("vok").onchange=function(){$("vgo").disabled=!ready()};$("vgo").onclick=vote;sum()}}
+function manual(d){var ex=$("ex");ex.textContent="For example, "+d.options[1].voteAmountWif+" $WIF is option 2.";
+ var m=$("man");m.textContent="To vote without the button, send exactly one of these amounts of $WIF to the dead address: "+d.options.map(function(o){return o.sym+" "+o.voteAmountWif}).join(", ")+". Any other amount is not counted as a vote."}
+function say(t,c){var s=$("vst");s.className="vst"+(c?" "+c:"");s.textContent=t}
+function friendly(e){var m=(e&&e.message)||"Something went wrong.";if(/No browser wallet/i.test(m))return"No browser wallet found. Install MetaMask, or open this page inside your wallet app's browser. You can also vote by sending the exact amount shown under \"How votes are counted\".";return m}
+function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+async function vote(){if(!ready())return;busy=true;$("vgo").disabled=true;var o=DATA.options[sel-1],amt=o.voteAmountWif;
+ try{if(!info){info=await(await fetch("/api/pass-info")).json();if(!info.token||!info.dead)throw new Error("Could not load the token details. Try again in a moment.")}
+  say("Opening your wallet…");var w=await MXW.connect();
+  say("Confirm the burn of "+amt+" $WIF in your wallet…");var tx=await MXW.burn(w,info,amt);
+  var s=$("vst");s.className="vst";s.textContent="Sent. Waiting for the chain to count it… ";var a=el("a",null,"View transaction");a.href=DATA.explorer+"/tx/"+tx;a.target="_blank";a.rel="noopener";s.appendChild(a);
+  var found=false;for(var k=0;k<24&&!found;k++){await sleep(5000);try{var r=await fetch("/api/votes?round="+encodeURIComponent(DATA.round.key)),j=await r.json();if(r.ok){found=j.options.some(function(x){return x.list.some(function(v){return v.tx===String(tx).toLowerCase()})});if(found){render(j);panel(j)}}}catch(e){}}
+  if(found){s.className="vst ok";s.textContent="Your vote for "+o.sym+" is counted. Thank you. ";s.appendChild(a)}
+  else{s.className="vst";s.textContent="Your transaction was sent but is not in the tally yet. It can take a minute. Reload this page to check, or open the transaction. ";s.appendChild(a)}
+ }catch(e){say(friendly(e),"er")}
+ busy=false;$("vgo").disabled=!ready()}
+function load(){fetch("/api/votes"+(q?"?round="+encodeURIComponent(q):"")).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||"Failed");return j})}).then(function(d){render(d);panel(d);manual(d)}).catch(function(e){$("out").textContent="";$("out").appendChild(el("div","warn","Could not read the vote tally: "+e.message+". This is an error, not an empty round."))})}
+load();
 </script><script src="/site.js"></script></body></html>
