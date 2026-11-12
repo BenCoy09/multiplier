@@ -40,8 +40,8 @@ var want=(new URLSearchParams(location.search).get("token")||"").toUpperCase();i
 function get(u){return fetch(u).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||"Failed");return j})})}
 function best(o){return o&&o.options?o.options.slice().sort(function(a,b){return b.votes-a.votes})[0]:null}
 async function findPick(){try{var cur=await get("/api/votes"),prev=await get("/api/votes?round="+encodeURIComponent(cur.round.prev));
-  if(prev.final&&prev.leader){var o=prev.options.filter(function(x){return x.sym===prev.leader})[0];return{sym:prev.leader,round:prev.round.key,votes:o.votes,final:true}}
-  if(cur.leader){var c=cur.options.filter(function(x){return x.sym===cur.leader})[0];return{sym:cur.leader,round:cur.round.key,votes:c.votes,final:false}}}catch(e){}return null}
+  if(prev.final&&prev.leader){var o=prev.options.filter(function(x){return x.sym===prev.leader})[0];return{sym:prev.leader,round:prev.round.key,votes:o.points,final:true}}
+  if(cur.leader){var c=cur.options.filter(function(x){return x.sym===cur.leader})[0];return{sym:cur.leader,round:cur.round.key,votes:c.points,final:false}}}catch(e){}return null}
 function chips(sel,pick){var t=$("tk");t.textContent="";TOKS.forEach(function(s){var a=el("a",null,s+(pick&&pick.sym===s?" · community pick":""));a.href="?token="+s;if(s===sel)a.setAttribute("aria-current","true");t.appendChild(a)})}
 function show(rad,sym,pick){var o=$("out");o.textContent="";$("h").textContent="Multiplier audit: "+sym;
  var t=rad.tokens.filter(function(x){return x.sym===sym})[0];
@@ -57,7 +57,7 @@ function show(rad,sym,pick){var o=$("out");o.textContent="";$("h").textContent="
  var pick=await findPick(),rad;
  try{rad=await get("/api/radar")}catch(e){$("out").textContent="";$("out").appendChild(el("div","warn","Could not read the radar: "+e.message+". This is an error, not an empty history."));chips(want,pick);return}
  if(rad.error)$("out").appendChild(el("div","warn","The chain reader reported an error: "+rad.error));
- if(pick){var p=$("pk"),d=el("div","pick");d.appendChild(document.createTextNode((pick.final?"Community pick, round ":"Leading the vote this week, round ")+pick.round+": "+pick.sym+" with "+pick.votes+" vote"+(pick.votes===1?"":"s")+". "));var a=el("a",null,"See the vote");a.href="/votes";d.appendChild(a);p.appendChild(d)}
+ if(pick){var p=$("pk"),d=el("div","pick");d.appendChild(document.createTextNode((pick.final?"Community pick, round ":"Leading the vote this week, round ")+pick.round+": "+pick.sym+" with "+pick.votes+" point"+(pick.votes===1?"":"s")+". "));var a=el("a",null,"See the vote");a.href="/votes";d.appendChild(a);p.appendChild(d)}
  var sym=want||(pick&&pick.sym)||"";chips(sym,pick);
  if(!sym){$("out").textContent="";$("out").appendChild(el("p","mu","Choose a token above to see every multiplier update on record for it."));return}
  show(rad,sym,pick)})();

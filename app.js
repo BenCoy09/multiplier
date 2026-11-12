@@ -635,7 +635,7 @@ async function portfolio(w) {
 
 const votes = require("./votes.js")({ rpc, getLogs, blockAt, hex, pad32, T_TR, WIF, DEAD, TOK, EXPLORER });
 const rd = (f) => require("fs").readFileSync(require("path").join(__dirname, f), "utf8");
-const HTML = rd("index.html"), HOME = rd("home.html"), ROOMSPAGE = rd("rooms.html"), JUDGESPAGE = rd("judges.html"), BUILDERSPAGE = rd("builders.html"), VOTESPAGE = rd("votes.html");
+const HTML = rd("index.html"), HOME = rd("home.html"), ROOMSPAGE = rd("rooms.html"), JUDGESPAGE = rd("judges.html"), BUILDERSPAGE = rd("builders.html"), VOTESPAGE = rd("votes.html"), AUDITPAGE = rd("audit.html");
 const STATIC = { "/logo.svg": [rd("logo.svg"), "image/svg+xml"], "/mark.svg": [rd("mark.svg"), "image/svg+xml"], "/site.css": [rd("site.css"), "text/css; charset=utf-8"], "/site.js": [rd("site.js"), "application/javascript; charset=utf-8"], "/wallet.js": [rd("wallet.js"), "application/javascript; charset=utf-8"] };
 if (process.argv[2] === "verify") verify().catch((e) => { console.error("VERIFY FAILED:", e.message); process.exit(1); });
 else http.createServer(async (req, res) => {
@@ -645,6 +645,7 @@ else http.createServer(async (req, res) => {
   if (STATIC[u.pathname]) { res.writeHead(200, { "content-type": STATIC[u.pathname][1], "cache-control": "public, max-age=300" }); return res.end(STATIC[u.pathname][0]); }
   if (u.pathname === "/builders") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(BUILDERSPAGE); }
   if (u.pathname === "/judges") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(JUDGESPAGE); }
+  if (u.pathname === "/audit") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(AUDITPAGE); }
   if (u.pathname === "/votes") { res.writeHead(200, { "content-type": "text/html; charset=utf-8" }); return res.end(VOTESPAGE); }
   if (u.pathname === "/api/votes") {
     const head = { "content-type": "application/json", "access-control-allow-origin": "*", "cache-control": "no-store" };
